@@ -10,11 +10,11 @@ const TeamsPage = () => {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // State for preview teams (not saved yet)
   const [previewTeams, setPreviewTeams] = useState([]);
   const [saving, setSaving] = useState(false);
-  
+
   // State for player counts (to show requirements)
   const [playerStats, setPlayerStats] = useState({
     total: 0,
@@ -50,7 +50,7 @@ const TeamsPage = () => {
       const players = await getPlayers();
       const intermediate = players.filter(p => p.expertise_level === 'Intermediate').length;
       const expert = players.filter(p => p.expertise_level === 'Expert').length;
-      
+
       setPlayerStats({
         total: players.length,
         intermediate,
@@ -61,7 +61,7 @@ const TeamsPage = () => {
       console.error('Error loading player stats:', err);
     }
   };
-  
+
   // Function to shuffle array randomly
   const shuffleArray = (array) => {
     const shuffled = [...array];
@@ -71,19 +71,19 @@ const TeamsPage = () => {
     }
     return shuffled;
   };
-  
+
   // Generate teams locally (preview mode - not saved to DB)
   const generateTeamsLocally = () => {
     const { players, intermediate, expert } = playerStats;
-    
+
     // Split players by expertise
     const intermediatePlayers = players.filter(p => p.expertise_level === 'Intermediate');
     const expertPlayers = players.filter(p => p.expertise_level === 'Expert');
-    
+
     // Shuffle players randomly
     const shuffledIntermediate = shuffleArray(intermediatePlayers);
     const shuffledExpert = shuffleArray(expertPlayers);
-    
+
     // Create teams - one Intermediate + one Expert per team
     const generatedTeams = [];
     for (let i = 0; i < intermediate; i++) {
@@ -97,7 +97,7 @@ const TeamsPage = () => {
         player2_expertise: 'Expert'
       });
     }
-    
+
     return generatedTeams;
   };
 
@@ -137,20 +137,20 @@ const TeamsPage = () => {
     setError(null);
     const generatedTeams = generateTeamsLocally();
     setPreviewTeams(generatedTeams);
-    
+
     // Scroll to preview section
     setTimeout(() => {
       document.getElementById('preview-section')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   };
-  
+
   // Handle team name change in preview
   const handleTeamNameChange = (index, newName) => {
     const updatedTeams = [...previewTeams];
     updatedTeams[index].team_name = newName;
     setPreviewTeams(updatedTeams);
   };
-  
+
   // Handle confirm and save teams to database
   const handleConfirmAndSave = async () => {
     if (previewTeams.length === 0) {
@@ -169,7 +169,7 @@ const TeamsPage = () => {
     try {
       setSaving(true);
       setError(null);
-      
+
       // Delete existing teams first (if any)
       if (teams.length > 0) {
         // Delete all existing teams
@@ -181,14 +181,14 @@ const TeamsPage = () => {
           }
         }
       }
-      
+
       // Save new teams to database
       await saveTeams(previewTeams);
-      
+
       // Clear preview and reload teams
       setPreviewTeams([]);
       await loadTeams();
-      
+
       // Show success message
       alert(`Successfully saved ${previewTeams.length} teams to database!`);
     } catch (err) {
@@ -198,7 +198,7 @@ const TeamsPage = () => {
       setSaving(false);
     }
   };
-  
+
   // Handle cancel preview
   const handleCancelPreview = () => {
     if (window.confirm('Discard preview teams? They will not be saved.')) {
@@ -221,7 +221,7 @@ const TeamsPage = () => {
   };
 
   // Check if team generation is possible
-  const canGenerateTeams = 
+  const canGenerateTeams =
     playerStats.total > 0 &&
     playerStats.total % 2 === 0 &&
     playerStats.intermediate === playerStats.expert;
@@ -236,8 +236,8 @@ const TeamsPage = () => {
             Manage tournament teams ({teams.length} teams created)
           </p>
         </div>
-        <Button 
-          onClick={handleGenerateTeams} 
+        <Button
+          onClick={handleGenerateTeams}
           variant="primary"
           disabled={!canGenerateTeams || previewTeams.length > 0}
         >
@@ -306,7 +306,7 @@ const TeamsPage = () => {
               </Button>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {previewTeams.map((team, index) => (
               <TeamCardPreview
@@ -347,7 +347,7 @@ const TeamsPage = () => {
               <p className="text-yellow-800 text-sm">
                 {playerStats.total === 0 && 'Add players first'}
                 {playerStats.total > 0 && playerStats.total % 2 !== 0 && 'Need even number of players'}
-                {playerStats.total > 0 && playerStats.total % 2 === 0 && playerStats.intermediate !== playerStats.expert && 
+                {playerStats.total > 0 && playerStats.total % 2 === 0 && playerStats.intermediate !== playerStats.expert &&
                   'Need equal numbers of Intermediate and Expert players'}
               </p>
             </div>
@@ -357,7 +357,7 @@ const TeamsPage = () => {
 
       {/* Teams Grid */}
       {!loading && teams.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
           {teams.map((team) => (
             <TeamCard
               key={team.id}

@@ -41,3 +41,4 @@ const PlayerCard = ({ player, onEdit, onDelete }) => {
 
 export default PlayerCard;
 
+

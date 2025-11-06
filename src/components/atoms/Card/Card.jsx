@@ -18,3 +18,4 @@ const Card = ({ children, className = '', variant = 'default', ...props }) => {
 
 export default Card;
 
+
