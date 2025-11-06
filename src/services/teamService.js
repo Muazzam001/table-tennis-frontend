@@ -55,10 +55,30 @@ export const deleteTeam = async (id) => {
 
 // Generate random teams automatically
 // Pairs one Intermediate + one Expert per team
+// NOTE: This now saves directly to DB. Use generateTeamsLocally() for preview mode.
 export const generateRandomTeams = async () => {
   try {
     const response = await api.post('/teams/generate');
     return response.data || response; // Returns generated teams
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Save multiple teams to database
+export const saveTeams = async (teams) => {
+  try {
+    // Save teams one by one
+    const savedTeams = [];
+    for (const team of teams) {
+      const response = await api.post('/teams', {
+        team_name: team.team_name,
+        player1_id: team.player1_id,
+        player2_id: team.player2_id
+      });
+      savedTeams.push(response.data || response);
+    }
+    return savedTeams;
   } catch (error) {
     throw error;
   }
