@@ -8,7 +8,9 @@ import {
   generateMatchSchedule,
   createMultipleMatches,
   updateMatchResult,
-  generateQuarterFinals
+  generateQuarterFinals,
+  generateSemiFinals,
+  generateFinal
 } from '../services/matchService';
 import { getTeams } from '../services/teamService';
 
@@ -22,6 +24,8 @@ const MatchesPage = () => {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generatingQF, setGeneratingQF] = useState(false);
+  const [generatingSF, setGeneratingSF] = useState(false);
+  const [generatingFinal, setGeneratingFinal] = useState(false);
 
   // Load data on mount
   useEffect(() => {
@@ -57,13 +61,21 @@ const MatchesPage = () => {
     const startDate = prompt('Enter start date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
     if (!startDate) return;
 
+    const endDateInput = prompt('Enter end date (YYYY-MM-DD) - Leave empty for no end date:', '');
+    const endDate = endDateInput && endDateInput.trim() !== '' ? endDateInput.trim() : null;
+
+    if (endDate && new Date(endDate) < new Date(startDate)) {
+      setError('End date must be after start date');
+      return;
+    }
+
     const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
 
     try {
       setGenerating(true);
       setError(null);
 
-      const schedule = await generateMatchSchedule(startDate, venue);
+      const schedule = await generateMatchSchedule(startDate, endDate, venue);
 
       // Save matches to database
       await createMultipleMatches(schedule.matches);
@@ -72,6 +84,13 @@ const MatchesPage = () => {
       await loadData();
 
       let message = `Schedule generated! ${schedule.matches.length} qualifying matches created.`;
+      if (schedule.data?.dateRange?.totalDays) {
+        message += `\n\nDate range: ${startDate} to ${endDate} (${schedule.data.dateRange.totalDays} day(s))`;
+      } else if (endDate) {
+        message += `\n\nDate range: ${startDate} to ${endDate}`;
+      } else {
+        message += `\n\nStarting from: ${startDate}`;
+      }
       if (schedule.data?.additionalMatch) {
         message += `\n\n${schedule.data.additionalMatch.message}`;
       }
@@ -152,6 +171,94 @@ const MatchesPage = () => {
       console.error('Error generating Quarter Finals:', err);
     } finally {
       setGeneratingQF(false);
+    }
+  };
+
+  // Generate Semi Finals
+  const handleGenerateSemiFinals = async () => {
+    const quarterFinals = matches.filter(m => m.round_type === 'Quarter Final');
+    const completedQF = quarterFinals.filter(m => m.status === 'Completed');
+
+    if (quarterFinals.length === 0) {
+      setError('No Quarter Final matches found. Please generate Quarter Finals first.');
+      return;
+    }
+
+    if (completedQF.length < quarterFinals.length) {
+      setError(`Please complete all Quarter Final matches first. ${completedQF.length}/${quarterFinals.length} completed.`);
+      return;
+    }
+
+    const existingSF = matches.filter(m => m.round_type === 'Semi Final');
+    if (existingSF.length > 0) {
+      setError('Semi Finals already generated. Delete existing Semi Final matches to regenerate.');
+      return;
+    }
+
+    const startDate = prompt('Enter start date for Semi Finals (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+    if (!startDate) return;
+
+    const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
+
+    try {
+      setGeneratingSF(true);
+      setError(null);
+
+      const result = await generateSemiFinals(startDate, venue);
+
+      // Reload matches
+      await loadData();
+
+      alert(`Semi Finals generated! ${result.data.matches.length} matches created.`);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to generate Semi Finals');
+      console.error('Error generating Semi Finals:', err);
+    } finally {
+      setGeneratingSF(false);
+    }
+  };
+
+  // Generate Final
+  const handleGenerateFinal = async () => {
+    const semiFinals = matches.filter(m => m.round_type === 'Semi Final');
+    const completedSF = semiFinals.filter(m => m.status === 'Completed');
+
+    if (semiFinals.length === 0) {
+      setError('No Semi Final matches found. Please generate Semi Finals first.');
+      return;
+    }
+
+    if (completedSF.length < semiFinals.length) {
+      setError(`Please complete all Semi Final matches first. ${completedSF.length}/${semiFinals.length} completed.`);
+      return;
+    }
+
+    const existingFinal = matches.filter(m => m.round_type === 'Final');
+    if (existingFinal.length > 0) {
+      setError('Final already generated. Delete existing Final match to regenerate.');
+      return;
+    }
+
+    const startDate = prompt('Enter start date for Final (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+    if (!startDate) return;
+
+    const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
+
+    try {
+      setGeneratingFinal(true);
+      setError(null);
+
+      const result = await generateFinal(startDate, venue);
+
+      // Reload matches
+      await loadData();
+
+      alert(`Final generated! The championship match is ready.`);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to generate Final');
+      console.error('Error generating Final:', err);
+    } finally {
+      setGeneratingFinal(false);
     }
   };
 
@@ -263,6 +370,58 @@ const MatchesPage = () => {
           </div>
         )}
 
+      {/* Generate Semi Finals Button */}
+      {selectedRound === 'Quarter Final' &&
+        matches.filter(m => m.round_type === 'Quarter Final').length > 0 &&
+        matches.filter(m => m.round_type === 'Quarter Final').every(m => m.status === 'Completed') &&
+        matches.filter(m => m.round_type === 'Semi Final').length === 0 && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-800 font-medium">
+                  ✅ All Quarter Final matches completed!
+                </p>
+                <p className="text-green-600 text-sm mt-1">
+                  Top 4 teams are ready. Generate Semi Finals to proceed.
+                </p>
+              </div>
+              <Button
+                onClick={handleGenerateSemiFinals}
+                variant="primary"
+                disabled={generatingSF}
+              >
+                {generatingSF ? 'Generating...' : '🏆 Generate Semi Finals'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+      {/* Generate Final Button */}
+      {selectedRound === 'Semi Final' &&
+        matches.filter(m => m.round_type === 'Semi Final').length > 0 &&
+        matches.filter(m => m.round_type === 'Semi Final').every(m => m.status === 'Completed') &&
+        matches.filter(m => m.round_type === 'Final').length === 0 && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-800 font-medium">
+                  ✅ All Semi Final matches completed!
+                </p>
+                <p className="text-green-600 text-sm mt-1">
+                  Top 2 teams are ready. Generate Final to determine the champion.
+                </p>
+              </div>
+              <Button
+                onClick={handleGenerateFinal}
+                variant="primary"
+                disabled={generatingFinal}
+              >
+                {generatingFinal ? 'Generating...' : '🏆 Generate Final'}
+              </Button>
+            </div>
+          </div>
+        )}
+
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
@@ -320,6 +479,39 @@ const MatchesPage = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Quarter Finals, Semi Finals, and Final - Show all matches */}
+      {!loading && ['Quarter Final', 'Semi Final', 'Final'].includes(selectedRound) && filteredMatches.length > 0 && (
+        <div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-4">
+            {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
+            {selectedRound === 'Semi Final' && 'Semi Final Matches'}
+            {selectedRound === 'Final' && 'Final Match'}
+          </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
+            {filteredMatches.map((match) => (
+              <MatchCard
+                key={match.id}
+                match={match}
+                onUpdateResult={handleUpdateResult}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* No matches for selected round */}
+      {!loading && ['Quarter Final', 'Semi Final', 'Final'].includes(selectedRound) && filteredMatches.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+          <div className="text-6xl mb-4">🏓</div>
+          <p className="text-gray-600 text-lg mb-2">No {selectedRound.toLowerCase()} matches yet</p>
+          <p className="text-gray-500 text-sm">
+            {selectedRound === 'Quarter Final' && 'Complete all qualifying matches to generate Quarter Finals.'}
+            {selectedRound === 'Semi Final' && 'Complete all Quarter Final matches to generate Semi Finals.'}
+            {selectedRound === 'Final' && 'Complete all Semi Final matches to generate the Final.'}
+          </p>
         </div>
       )}
 

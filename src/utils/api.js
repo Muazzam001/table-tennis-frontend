@@ -28,14 +28,47 @@ api.interceptors.response.use(
     return response.data;
   },
   (error) => {
+    // Handle network errors (backend not running)
+    if (!error.response) {
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        return Promise.reject(new Error('Backend server is not running. Please start the backend server on port 3001.'));
+      }
+    }
+    
     // Extract error message from response or use default
-    const message = error.response?.data?.error?.message 
+    let message = error.response?.data?.error?.message 
       || error.response?.data?.message 
       || error.message 
       || 'An error occurred';
+    
+    // Sanitize error messages - remove database/table names
+    message = sanitizeErrorMessage(message);
+    
     return Promise.reject(new Error(message));
   }
 );
+
+// Helper function to sanitize error messages - remove database/table names
+const sanitizeErrorMessage = (message) => {
+  if (!message) return 'An error occurred';
+  
+  // Remove database names (e.g., "table_tennis_tournament")
+  message = message.replace(/table_tennis_tournament/gi, 'database');
+  
+  // Remove table names (players, teams, matches, statistics, match_details)
+  message = message.replace(/\b(players|teams|matches|statistics|match_details)\b/gi, 'table');
+  
+  // Remove common MySQL error patterns with table names
+  message = message.replace(/Table\s+['"]?[\w_]+['"]?\s+doesn't exist/gi, 'Required table does not exist');
+  message = message.replace(/Unknown column\s+['"]?[\w_]+['"]?\s+in/gi, 'Unknown column in');
+  message = message.replace(/Table\s+['"]?[\w_]+['"]?\s+already exists/gi, 'Table already exists');
+  
+  // Remove specific error codes that might expose structure
+  message = message.replace(/ER_\w+/g, '');
+  message = message.replace(/\s+/g, ' ').trim();
+  
+  return message;
+};
 
 export default api;
 

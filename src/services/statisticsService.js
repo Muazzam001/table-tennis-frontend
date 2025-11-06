@@ -5,7 +5,8 @@ import api from '../utils/api.js';
 export const getDashboardStats = async () => {
   try {
     const response = await api.get('/statistics/dashboard');
-    return response.data || {};
+    // We need to extract the nested data field
+    return response?.data || response || {};
   } catch (error) {
     throw error;
   }

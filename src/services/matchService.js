@@ -66,10 +66,11 @@ export const createMultipleMatches = async (matches) => {
 };
 
 // Generate match schedule
-export const generateMatchSchedule = async (startDate, venue) => {
+export const generateMatchSchedule = async (startDate, endDate, venue) => {
   try {
     const response = await api.post('/matches/generate-schedule', {
       startDate,
+      endDate: endDate || null,
       venue: venue || 'Main Court',
       daysBetweenRounds: 1
     });
@@ -93,6 +94,32 @@ export const updateMatchResult = async (id, resultData) => {
 export const generateQuarterFinals = async (startDate, venue) => {
   try {
     const response = await api.post('/matches/generate-quarter-finals', {
+      startDate,
+      venue: venue || 'Main Court'
+    });
+    return response.data || response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Generate Semi Finals
+export const generateSemiFinals = async (startDate, venue) => {
+  try {
+    const response = await api.post('/matches/generate-semi-finals', {
+      startDate,
+      venue: venue || 'Main Court'
+    });
+    return response.data || response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Generate Final
+export const generateFinal = async (startDate, venue) => {
+  try {
+    const response = await api.post('/matches/generate-final', {
       startDate,
       venue: venue || 'Main Court'
     });
