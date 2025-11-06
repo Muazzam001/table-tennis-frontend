@@ -97,7 +97,9 @@ export const generateQuarterFinals = async (startDate, venue) => {
       startDate,
       venue: venue || 'Main Court'
     });
-    return response.data || response;
+    // API interceptor already returns response.data, so response is the data object
+    console.log('generateQuarterFinals response:', response);
+    return response;
   } catch (error) {
     throw error;
   }
@@ -110,7 +112,8 @@ export const generateSemiFinals = async (startDate, venue) => {
       startDate,
       venue: venue || 'Main Court'
     });
-    return response.data || response;
+    // API interceptor already returns response.data, so response is the data object
+    return response;
   } catch (error) {
     throw error;
   }
@@ -123,9 +126,11 @@ export const generateFinal = async (startDate, venue) => {
       startDate,
       venue: venue || 'Main Court'
     });
-    return response.data || response;
+    // API interceptor already returns response.data, so response is the data object
+    return response;
   } catch (error) {
     throw error;
   }
 };
+
 

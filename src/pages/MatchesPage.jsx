@@ -161,11 +161,16 @@ const MatchesPage = () => {
       setError(null);
 
       const result = await generateQuarterFinals(startDate, venue);
+      console.log('Quarter Finals generation result:', result);
 
       // Reload matches
       await loadData();
 
-      alert(`Quarter Finals generated! ${result.data.matches.length} matches created.`);
+      // Handle response structure - API interceptor returns response.data
+      // Backend sends: { success: true, data: { matches: [...] } }
+      // Interceptor returns: response.data = { success: true, data: { matches: [...] } }
+      const matchesCreated = result?.data?.matches?.length || result?.matches?.length || 0;
+      alert(`Quarter Finals generated! ${matchesCreated} matches created.`);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to generate Quarter Finals');
       console.error('Error generating Quarter Finals:', err);
@@ -209,7 +214,9 @@ const MatchesPage = () => {
       // Reload matches
       await loadData();
 
-      alert(`Semi Finals generated! ${result.data.matches.length} matches created.`);
+      // Handle response structure - API interceptor returns response.data
+      const matchesCreated = result?.data?.matches?.length || result?.matches?.length || 0;
+      alert(`Semi Finals generated! ${matchesCreated} matches created.`);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to generate Semi Finals');
       console.error('Error generating Semi Finals:', err);
@@ -425,7 +432,7 @@ const MatchesPage = () => {
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          <strong>Error: </strong>{error}
+          <strong>Error</strong>
         </div>
       )}
 
@@ -538,3 +545,4 @@ const MatchesPage = () => {
 };
 
 export default MatchesPage;
+

@@ -323,7 +323,7 @@ const TeamsPage = () => {
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          <strong>Error: </strong>{error}
+          <strong>Error</strong>
         </div>
       )}
 

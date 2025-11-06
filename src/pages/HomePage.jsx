@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import Card from '../components/atoms/Card';
 import Button from '../components/atoms/Button';
 import { getDashboardStats } from '../services/statisticsService';
 import { seedTeamsAndMatches } from '../services/seedService';
 
 const HomePage = () => {
+  const location = useLocation();
   const [stats, setStats] = useState({
     totalPlayers: 0,
     totalTeams: 0,
@@ -21,43 +22,53 @@ const HomePage = () => {
   const [dataSeeded, setDataSeeded] = useState(false);
   const [seedingSteps, setSeedingSteps] = useState([]);
 
-  useEffect(() => {
-    // Only load stats if we think data might be seeded
-    // Check localStorage first to avoid unnecessary API calls
-    const hasSeededData = localStorage.getItem('hasSeededData') === 'true';
-    if (hasSeededData) {
-      setDataSeeded(true);
-      loadStats();
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadStats = async () => {
+  // Memoize loadStats to avoid dependency issues
+  const loadStats = useCallback(async (forceReload = false) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await getDashboardStats();
-      // Handle both response structures: { success: true, data: {...} } or direct data object
-      const statsData = response?.data || response || {};
-      const hasData = (statsData.totalPlayers || 0) > 0 || (statsData.totalTeams || 0) > 0;
       
+      console.log('🔄 Loading stats...', { forceReload });
+      const statsData = await getDashboardStats();
+      console.log('📦 Stats data received:', JSON.stringify(statsData, null, 2));
+      
+      // getDashboardStats now returns the data directly: { totalPlayers: ..., totalTeams: ..., ... }
+      // No need for nested extraction
+      
+      // Always create a new stats object to ensure React detects the change
+      const newStats = {
+        totalPlayers: Number(statsData.totalPlayers) || 0,
+        totalTeams: Number(statsData.totalTeams) || 0,
+        totalMatches: Number(statsData.totalMatches) || 0,
+        completedMatches: Number(statsData.completedMatches) || 0,
+        upcomingMatches: Number(statsData.upcomingMatches) || 0,
+        expertiseLevels: statsData.expertiseLevels || {},
+        matchesByRound: statsData.matchesByRound || {}
+      };
+      
+      console.log('📊 New stats to set:', newStats);
+      console.log('📊 Current stats before update:', stats);
+      
+      // Always update stats, even if values are 0
+      // Use direct setState to ensure React detects the change
+      setStats(newStats);
+      
+      // Force a re-render by updating a timestamp
+      const updateKey = Date.now();
+      console.log('🔄 Stats state updated with key:', updateKey);
+      
+      const hasData = (newStats.totalPlayers || 0) > 0 || (newStats.totalTeams || 0) > 0;
       if (hasData) {
         setDataSeeded(true);
         localStorage.setItem('hasSeededData', 'true');
+        console.log('✅ Data detected, marked as seeded');
+      } else {
+        console.log('⚠️ No data found in stats response');
       }
       
-      setStats({
-        totalPlayers: statsData.totalPlayers || 0,
-        totalTeams: statsData.totalTeams || 0,
-        totalMatches: statsData.totalMatches || 0,
-        completedMatches: statsData.completedMatches || 0,
-        upcomingMatches: statsData.upcomingMatches || 0,
-        expertiseLevels: statsData.expertiseLevels || {},
-        matchesByRound: statsData.matchesByRound || {}
-      });
+      console.log('✅ Stats updated successfully');
     } catch (err) {
-      console.error('Error loading dashboard stats:', err);
+      console.error('❌ Error loading dashboard stats:', err);
       // Don't show error if it's just a connection issue - user might not have backend running yet
       const errorMessage = err.message || 'Failed to load statistics';
       if (errorMessage.includes('Backend server is not running')) {
@@ -69,7 +80,41 @@ const HomePage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Always try to load stats on mount or when component becomes visible
+    const hasSeededData = localStorage.getItem('hasSeededData') === 'true';
+    if (hasSeededData) {
+      setDataSeeded(true);
+    }
+    // Always load stats to get current state
+    loadStats();
+  }, [loadStats]);
+  
+  // Reload stats when navigating back to this page
+  useEffect(() => {
+    const hasSeededData = localStorage.getItem('hasSeededData') === 'true';
+    if (hasSeededData && location.pathname === '/') {
+      console.log('Navigated to homepage, reloading stats...');
+      loadStats(true);
+    }
+  }, [location.pathname, loadStats]);
+  
+  // Reload stats when component becomes visible (after navigation)
+  useEffect(() => {
+    const handleFocus = () => {
+      const hasSeededData = localStorage.getItem('hasSeededData') === 'true';
+      if (hasSeededData) {
+        console.log('Page focused, reloading stats...');
+        loadStats(true);
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadStats]);
+
 
   const getExpertiseText = () => {
     const intermediate = stats.expertiseLevels?.Intermediate || 0;
@@ -146,15 +191,18 @@ const HomePage = () => {
       setDataSeeded(true);
       localStorage.setItem('hasSeededData', 'true');
       
+      // Immediately reload stats after seeding completes
+      setError(null);
+      console.log('Seeding completed, reloading stats...');
+      
+      // Force reload stats to get fresh data immediately
+      await loadStats(true);
+      
+      // Clear steps after stats are loaded
+      setSeedingSteps([]);
+      
+      // Show success message after stats are loaded
       alert(`Setup & Seeding completed!\n\n${result?.message || 'Success'}\n\n${messageParts.join('\n')}`);
-      
-      // Clear steps after a moment
-      setTimeout(() => {
-        setSeedingSteps([]);
-      }, 2000);
-      
-      // Reload stats after seeding
-      await loadStats();
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to setup and seed data';
       setError(errorMessage);
@@ -338,5 +386,6 @@ const HomePage = () => {
 };
 
 export default HomePage;
+
 
 
