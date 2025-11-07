@@ -225,7 +225,7 @@ const HomePage = () => {
       } else if (errorMessage.includes('Access denied')) {
         troubleshootingSteps = [
           '1. Check backend/.env file exists',
-          '2. Verify DB_USER and DB_PASSWORD are correct',
+          '2. Verify DB_USER and DB_PASS are correct',
           '3. Test connection: mysql -u [user] -p',
           '4. Ensure user has CREATE DATABASE permission'
         ];
