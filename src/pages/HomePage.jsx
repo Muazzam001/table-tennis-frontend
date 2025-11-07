@@ -2,11 +2,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Card from '../components/atoms/Card';
 import Button from '../components/atoms/Button';
+import { useAuth } from '../contexts/AuthContext';
 import { getDashboardStats } from '../services/statisticsService';
 import { seedTeamsAndMatches } from '../services/seedService';
 
 const HomePage = () => {
   const location = useLocation();
+  const { isAdmin } = useAuth();
   const [stats, setStats] = useState({
     totalPlayers: 0,
     totalTeams: 0,
@@ -258,7 +260,7 @@ const HomePage = () => {
         <p className="text-xl text-gray-600 mb-6">
           Manage your in-house tournament with ease
         </p>
-        {(!dataSeeded || stats.totalPlayers === 0 || stats.totalTeams === 0 || stats.totalMatches === 0) && (
+        {isAdmin && (!dataSeeded || stats.totalPlayers === 0 || stats.totalTeams === 0 || stats.totalMatches === 0) && (
           <div className="flex flex-col items-center gap-4">
             <Button
               onClick={handleSeedData}
@@ -313,7 +315,7 @@ const HomePage = () => {
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Link to="/players" className="block">
+        <Link to="/players" className="block cursor-pointer">
           <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">👥</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Players</h3>
@@ -328,7 +330,7 @@ const HomePage = () => {
           </Card>
         </Link>
         
-        <Link to="/teams" className="block">
+        <Link to="/teams" className="block cursor-pointer">
           <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">🤝</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Teams</h3>
@@ -347,7 +349,7 @@ const HomePage = () => {
           </Card>
         </Link>
         
-        <Link to="/matches" className="block">
+        <Link to="/matches" className="block cursor-pointer">
           <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">⚔️</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Matches</h3>
@@ -364,7 +366,7 @@ const HomePage = () => {
           </Card>
         </Link>
         
-        <Link to="/statistics" className="block">
+        <Link to="/statistics" className="block cursor-pointer">
           <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">📊</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Statistics</h3>
@@ -386,6 +388,9 @@ const HomePage = () => {
 };
 
 export default HomePage;
+
+
+
 
 
 

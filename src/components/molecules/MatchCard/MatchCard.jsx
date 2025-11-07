@@ -2,7 +2,7 @@ import Badge from '../../atoms/Badge';
 import Button from '../../atoms/Button';
 
 // Component to display a single match card
-const MatchCard = ({ match, onUpdateResult, showActions = true }) => {
+const MatchCard = ({ match, onUpdateResult, showActions = true, isAdmin = false }) => {
   const isCompleted = match.status === 'Completed';
   const isAbandoned = match.is_abandoned;
   const winner = match.winner_team_id === match.team1_id ? match.team1_name : 
@@ -77,7 +77,7 @@ const MatchCard = ({ match, onUpdateResult, showActions = true }) => {
         </div>
 
         {/* Action Button */}
-        {showActions && (
+        {showActions && isAdmin && (
           <Button
             variant="outline"
             size="sm"

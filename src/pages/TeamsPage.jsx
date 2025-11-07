@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import Button from '../components/atoms/Button';
 import TeamCard from '../components/molecules/TeamCard';
 import TeamCardPreview from '../components/molecules/TeamCardPreview';
+import { useAuth } from '../contexts/AuthContext';
 import { getTeams, saveTeams, deleteTeam } from '../services/teamService';
 import { getPlayers } from '../services/playerService';
 
 const TeamsPage = () => {
+  const { isAdmin } = useAuth();
   // State for managing teams list (saved teams from DB)
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -236,13 +238,15 @@ const TeamsPage = () => {
             Manage tournament teams ({teams.length} teams created)
           </p>
         </div>
-        <Button
-          onClick={handleGenerateTeams}
-          variant="primary"
-          disabled={!canGenerateTeams || previewTeams.length > 0}
-        >
-          🎲 Generate Random Teams
-        </Button>
+        {isAdmin && (
+          <Button
+            onClick={handleGenerateTeams}
+            variant="primary"
+            disabled={!canGenerateTeams || previewTeams.length > 0}
+          >
+            🎲 Generate Random Teams
+          </Button>
+        )}
       </div>
 
       {/* Requirements Info Card */}
@@ -363,6 +367,7 @@ const TeamsPage = () => {
               key={team.id}
               team={team}
               onDelete={handleDelete}
+              isAdmin={isAdmin}
             />
           ))}
         </div>

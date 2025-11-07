@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Button from '../components/atoms/Button';
 import MatchCard from '../components/molecules/MatchCard';
 import MatchResultForm from '../components/molecules/MatchResultForm';
+import { useAuth } from '../contexts/AuthContext';
 import {
   getMatches,
   getMatchesByRound,
@@ -15,6 +16,7 @@ import {
 import { getTeams } from '../services/teamService';
 
 const MatchesPage = () => {
+  const { isAdmin } = useAuth();
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -316,13 +318,15 @@ const MatchesPage = () => {
             Tournament match schedule and results
           </p>
         </div>
-        <Button
-          onClick={handleGenerateSchedule}
-          variant="primary"
-          disabled={generating || teams.length < 8}
-        >
-          {generating ? 'Generating...' : '📅 Generate Schedule'}
-        </Button>
+        {isAdmin && (
+          <Button
+            onClick={handleGenerateSchedule}
+            variant="primary"
+            disabled={generating || teams.length < 8}
+          >
+            {generating ? 'Generating...' : '📅 Generate Schedule'}
+          </Button>
+        )}
       </div>
 
       {/* Requirements */}
@@ -366,13 +370,15 @@ const MatchesPage = () => {
                   Top 4 teams from each pool are ready. Generate Quarter Finals to proceed.
                 </p>
               </div>
-              <Button
-                onClick={handleGenerateQuarterFinals}
-                variant="primary"
-                disabled={generatingQF}
-              >
-                {generatingQF ? 'Generating...' : '🏆 Generate Quarter Finals'}
-              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={handleGenerateQuarterFinals}
+                  variant="primary"
+                  disabled={generatingQF}
+                >
+                  {generatingQF ? 'Generating...' : '🏆 Generate Quarter Finals'}
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -392,13 +398,15 @@ const MatchesPage = () => {
                   Top 4 teams are ready. Generate Semi Finals to proceed.
                 </p>
               </div>
-              <Button
-                onClick={handleGenerateSemiFinals}
-                variant="primary"
-                disabled={generatingSF}
-              >
-                {generatingSF ? 'Generating...' : '🏆 Generate Semi Finals'}
-              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={handleGenerateSemiFinals}
+                  variant="primary"
+                  disabled={generatingSF}
+                >
+                  {generatingSF ? 'Generating...' : '🏆 Generate Semi Finals'}
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -418,13 +426,15 @@ const MatchesPage = () => {
                   Top 2 teams are ready. Generate Final to determine the champion.
                 </p>
               </div>
-              <Button
-                onClick={handleGenerateFinal}
-                variant="primary"
-                disabled={generatingFinal}
-              >
-                {generatingFinal ? 'Generating...' : '🏆 Generate Final'}
-              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={handleGenerateFinal}
+                  variant="primary"
+                  disabled={generatingFinal}
+                >
+                  {generatingFinal ? 'Generating...' : '🏆 Generate Final'}
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -466,6 +476,7 @@ const MatchesPage = () => {
                     key={match.id}
                     match={match}
                     onUpdateResult={handleUpdateResult}
+                    isAdmin={isAdmin}
                   />
                 ))}
               </div>
@@ -481,6 +492,7 @@ const MatchesPage = () => {
                     key={match.id}
                     match={match}
                     onUpdateResult={handleUpdateResult}
+                    isAdmin={isAdmin}
                   />
                 ))}
               </div>
@@ -545,4 +557,5 @@ const MatchesPage = () => {
 };
 
 export default MatchesPage;
+
 

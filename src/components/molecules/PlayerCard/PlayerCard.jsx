@@ -2,7 +2,7 @@ import Badge from '../../atoms/Badge';
 import Button from '../../atoms/Button';
 
 // Component to display a single player card
-const PlayerCard = ({ player, onEdit, onDelete }) => {
+const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
   return (
     <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg transition-shadow">
       <div className="flex flex-col gap-4">
@@ -18,22 +18,24 @@ const PlayerCard = ({ player, onEdit, onDelete }) => {
           </div>
         </div>
         <p className="text-gray-600 text-sm">{player.email}</p>
-        <div className="flex gap-2 justify-end">
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => onDelete(player.id)}
-          >
-            Delete
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(player)}
-          >
-            Edit
-          </Button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => onDelete(player.id)}
+            >
+              Delete
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(player)}
+            >
+              Edit
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

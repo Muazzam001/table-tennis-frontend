@@ -173,7 +173,7 @@ const MatchResultForm = ({ match, onSubmit, onCancel, onWinnerChange }) => {
               name="scheduled_date"
               value={formData.scheduled_date}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 cursor-pointer"
             />
           </div>
           <Input
@@ -232,13 +232,13 @@ const MatchResultForm = ({ match, onSubmit, onCancel, onWinnerChange }) => {
         )}
 
         <div className="mb-4">
-          <label className="flex items-center">
+          <label className="flex items-center cursor-pointer">
             <input
               type="checkbox"
               name="is_abandoned"
               checked={formData.is_abandoned}
               onChange={handleChange}
-              className="mr-2"
+              className="mr-2 cursor-pointer"
             />
             <span className="text-sm font-medium text-gray-700">Match Abandoned/Unavailable</span>
           </label>

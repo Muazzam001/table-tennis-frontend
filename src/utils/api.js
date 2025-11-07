@@ -14,6 +14,11 @@ const api = axios.create({
 // Request interceptor - runs before every API request
 api.interceptors.request.use(
   (config) => {
+    // Add token to request if available
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
@@ -33,6 +38,21 @@ api.interceptors.response.use(
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         return Promise.reject(new Error('Backend server is not running. Please start the backend server on port 3001.'));
       }
+    }
+    
+    // Handle 401 Unauthorized - token expired or invalid
+    if (error.response?.status === 401) {
+      // Clear token and redirect to login if not already there
+      localStorage.removeItem('token');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(new Error('Session expired. Please login again.'));
+    }
+
+    // Handle 403 Forbidden - admin access required
+    if (error.response?.status === 403) {
+      return Promise.reject(new Error('Admin access required. You do not have permission to perform this action.'));
     }
     
     // Extract error message from response or use default

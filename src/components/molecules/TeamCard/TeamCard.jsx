@@ -2,7 +2,7 @@ import Badge from '../../atoms/Badge';
 import Button from '../../atoms/Button';
 
 // Component to display a single team card
-const TeamCard = ({ team, onEdit, onDelete }) => {
+const TeamCard = ({ team, onEdit, onDelete, isAdmin = false }) => {
   // Determine which player is Intermediate and which is Expert
   const intermediatePlayer = team.player1_expertise === 'Intermediate' 
     ? { name: team.player1_name, id: team.player1_id }
@@ -41,26 +41,28 @@ const TeamCard = ({ team, onEdit, onDelete }) => {
         </div>
         
         {/* Action Buttons */}
-        <div className="flex gap-2 justify-end pt-2 border-t border-gray-200">
-          {onDelete && (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => onDelete(team.id)}
-            >
-              Delete
-            </Button>
-          )}
-          {onEdit && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEdit(team)}
-            >
-              Edit
-            </Button>
-          )}
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 justify-end pt-2 border-t border-gray-200">
+            {onDelete && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => onDelete(team.id)}
+              >
+                Delete
+              </Button>
+            )}
+            {onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(team)}
+              >
+                Edit
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

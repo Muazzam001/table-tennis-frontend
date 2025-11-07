@@ -22,7 +22,7 @@ const Select = ({
         value={value}
         onChange={onChange}
         className={`
-          w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500
+          w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 cursor-pointer
           ${error ? 'border-red-500' : 'border-gray-300'}
           ${className}
         `}

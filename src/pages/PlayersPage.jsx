@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import Button from '../components/atoms/Button';
 import PlayerCard from '../components/molecules/PlayerCard';
 import PlayerForm from '../components/molecules/PlayerForm';
+import { useAuth } from '../contexts/AuthContext';
 import { getPlayers, createPlayer, updatePlayer, deletePlayer } from '../services/playerService';
 
 const PlayersPage = () => {
+  const { isAdmin } = useAuth();
   // State for managing players list
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,9 +108,11 @@ const PlayersPage = () => {
             Manage tournament players ({players.length} total)
           </p>
         </div>
-        <Button onClick={handleAddNew} variant="primary">
-          + Add New Player
-        </Button>
+        {isAdmin && (
+          <Button onClick={handleAddNew} variant="primary">
+            + Add New Player
+          </Button>
+        )}
       </div>
 
       {/* Statistics Cards */}
@@ -160,9 +164,11 @@ const PlayersPage = () => {
       {!loading && players.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <p className="text-gray-600 text-lg mb-4">No players found</p>
-          <Button onClick={handleAddNew} variant="primary">
-            Add Your First Player
-          </Button>
+          {isAdmin && (
+            <Button onClick={handleAddNew} variant="primary">
+              Add Your First Player
+            </Button>
+          )}
         </div>
       )}
 
@@ -180,12 +186,13 @@ const PlayersPage = () => {
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {expertPlayers.map((player) => (
-                  <PlayerCard
-                    key={player.id}
-                    player={player}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
+                <PlayerCard
+                  key={player.id}
+                  player={player}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  isAdmin={isAdmin}
+                />
                 ))}
               </div>
             </div>
@@ -212,12 +219,13 @@ const PlayersPage = () => {
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {intermediatePlayers.map((player) => (
-                  <PlayerCard
-                    key={player.id}
-                    player={player}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
+                <PlayerCard
+                  key={player.id}
+                  player={player}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  isAdmin={isAdmin}
+                />
                 ))}
               </div>
             </div>
