@@ -4,7 +4,10 @@ import Card from '../components/atoms/Card';
 import Button from '../components/atoms/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { getDashboardStats } from '../services/statisticsService';
-import { seedTeamsAndMatches } from '../services/seedService';
+import { seedPlayers } from '../services/seedService';
+import { resetApplicationData } from '../services/adminService';
+import { getLeagueGroups } from '../services/tournamentService';
+import GroupAssignmentsTable from '../components/molecules/GroupAssignmentsTable';
 
 const HomePage = () => {
   const location = useLocation();
@@ -23,6 +26,8 @@ const HomePage = () => {
   const [seeding, setSeeding] = useState(false);
   const [dataSeeded, setDataSeeded] = useState(false);
   const [seedingSteps, setSeedingSteps] = useState([]);
+  const [resetting, setResetting] = useState(false);
+  const [leagueGroupsByLeague, setLeagueGroupsByLeague] = useState({});
 
   // Memoize loadStats to avoid dependency issues
   const loadStats = useCallback(async (forceReload = false) => {
@@ -69,6 +74,23 @@ const HomePage = () => {
       }
       
       console.log('✅ Stats updated successfully');
+
+      if ((newStats.totalTeams || 0) > 0 && (newStats.totalMatches || 0) > 0) {
+        const leagues = ['Expert', 'Intermediate', 'Women'];
+        const groupResults = await Promise.all(
+          leagues.map(async (league) => {
+            try {
+              const data = await getLeagueGroups(league);
+              return [league, data?.groups || []];
+            } catch {
+              return [league, []];
+            }
+          })
+        );
+        setLeagueGroupsByLeague(Object.fromEntries(groupResults));
+      } else {
+        setLeagueGroupsByLeague({});
+      }
     } catch (err) {
       console.error('❌ Error loading dashboard stats:', err);
       // Don't show error if it's just a connection issue - user might not have backend running yet
@@ -127,84 +149,87 @@ const HomePage = () => {
     return 'No players yet';
   };
 
+  const handleResetData = async () => {
+    if (!window.confirm(
+      'This will delete ALL players, teams, matches, and statistics. Admin user accounts will be preserved. Continue?'
+    )) {
+      return;
+    }
+
+    try {
+      setResetting(true);
+      setError(null);
+      const result = await resetApplicationData();
+      localStorage.removeItem('hasSeededData');
+      setDataSeeded(false);
+      await loadStats(true);
+
+      const cleared = result?.data?.tablesCleared?.join(', ') || 'tournament tables';
+      const verified = result?.data?.verification;
+      let detail = `Cleared: ${cleared}. New rows will use IDs starting at 1.`;
+      if (verified) {
+        const lines = Object.entries(verified).map(
+          ([table, state]) => `${table}: ${state.rowCount} rows cleared (${state.method})`
+        );
+        detail += `\n\n${lines.join('\n')}`;
+      }
+      alert(`Application data reset successfully.\n\n${detail}\n\nYou can reseed demo data when ready.`);
+    } catch (err) {
+      setError(err.message || 'Failed to reset application data');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleSeedData = async () => {
-    const willSeedPlayers = stats.totalPlayers === 0;
-    const confirmMessage = willSeedPlayers
-      ? 'This will setup the database (if needed), generate players, teams, and matches for demo purposes. All existing data will be cleared. Continue?'
-      : 'This will setup the database (if needed) and generate teams and matches for demo purposes. Existing teams and matches will be cleared. Continue?';
-    
+    const confirmMessage =
+      'This will setup the database (if needed) and seed demo players only. ' +
+      'All existing players, teams, matches, and statistics will be cleared.\n\n' +
+      'Next steps after seeding:\n' +
+      '1. Edit players on the Players page\n' +
+      '2. Generate teams on the Teams page\n' +
+      '3. Create match schedules on the Matches page\n\n' +
+      'Continue?';
+
     if (!window.confirm(confirmMessage)) {
       return;
     }
-
-    const startDate = prompt('Enter start date for matches (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-    if (!startDate) return;
-
-    const endDateInput = prompt('Enter end date (YYYY-MM-DD) - Leave empty for no end date:', '');
-    const endDate = endDateInput && endDateInput.trim() !== '' ? endDateInput.trim() : null;
-
-    if (endDate && new Date(endDate) < new Date(startDate)) {
-      setError('End date must be after start date');
-      return;
-    }
-
-    const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
 
     try {
       setSeeding(true);
       setError(null);
       setSeedingSteps([]);
       
-      // Show manual process steps
-      const steps = [];
-      steps.push('Step 1: Setting up database structure...');
+      const steps = ['Step 1: Setting up database structure...'];
       setSeedingSteps([...steps]);
       
-      // Seed with automatic database setup (handled in backend)
-      const result = await seedTeamsAndMatches(startDate, endDate, venue, true, willSeedPlayers);
+      const result = await seedPlayers(true);
       
       steps.push('Step 2: Database structure ready');
-      if (willSeedPlayers) {
-        steps.push('Step 3: Creating players...');
-        setSeedingSteps([...steps]);
-      }
-      
-      steps.push('Step 4: Generating teams...');
-      setSeedingSteps([...steps]);
-      
-      steps.push('Step 5: Creating match schedule...');
+      steps.push('Step 3: Creating demo players...');
+      steps.push('Step 4: Player seeding completed!');
       setSeedingSteps([...steps]);
       
       const messageParts = [];
       if (result?.data?.playersCreated > 0) {
-        messageParts.push(`✓ Players created: ${result.data.playersCreated}`);
+        messageParts.push(`Players created: ${result.data.playersCreated}`);
       }
-      if (result?.data?.teamsCreated) {
-        messageParts.push(`✓ Teams created: ${result.data.teamsCreated}`);
+      if (result?.data?.leagueCounts) {
+        const { expertMen, intermediateMen, women, total } = result.data.leagueCounts;
+        messageParts.push(`Total players: ${total} (Expert Men: ${expertMen}, Intermediate Men: ${intermediateMen}, Women: ${women})`);
       }
-      if (result?.data?.matchesCreated > 0) {
-        messageParts.push(`✓ Matches created: ${result.data.matchesCreated}`);
+      if (result?.data?.possibleTeams?.Expert) {
+        messageParts.push(`Expert league can form up to ${result.data.possibleTeams.Expert} teams after pairing`);
       }
       
-      steps.push('Step 6: Seeding completed successfully!');
-      setSeedingSteps([...steps]);
-      
-      // Mark data as seeded
       setDataSeeded(true);
       localStorage.setItem('hasSeededData', 'true');
-      
-      // Immediately reload stats after seeding completes
       setError(null);
-      console.log('Seeding completed, reloading stats...');
-      
-      // Force reload stats to get fresh data immediately
       await loadStats(true);
-      
-      // Clear steps after stats are loaded
       setSeedingSteps([]);
       
-      // Show success message after stats are loaded
-      alert(`Setup & Seeding completed!\n\n${result?.message || 'Success'}\n\n${messageParts.join('\n')}`);
+      const workflow = result?.data?.workflow?.map((step, i) => `${i + 1}. ${step}`).join('\n') || '';
+      alert(`Player seeding completed!\n\n${result?.message || 'Success'}\n\n${messageParts.join('\n')}\n\n${workflow}`);
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to setup and seed data';
       setError(errorMessage);
@@ -260,16 +285,23 @@ const HomePage = () => {
         <p className="text-xl text-gray-600 mb-6">
           Manage your in-house tournament with ease
         </p>
-        {isAdmin && (!dataSeeded || stats.totalPlayers === 0 || stats.totalTeams === 0 || stats.totalMatches === 0) && (
+        {isAdmin && (
           <div className="flex flex-col items-center gap-4">
+            {stats.totalPlayers === 0 && (
             <Button
               onClick={handleSeedData}
               variant="primary"
-              disabled={seeding}
+              disabled={seeding || resetting}
             >
-              {seeding ? 'Processing...' : stats.totalPlayers === 0 
-                ? '🌱 Seed Demo Data (Players, Teams & Matches)' 
-                : '🌱 Seed Demo Data (Teams & Matches)'}
+              {seeding ? 'Processing...' : '🌱 Seed Demo Players'}
+            </Button>
+            )}
+            <Button
+              onClick={handleResetData}
+              variant="outline"
+              disabled={seeding || resetting}
+            >
+              {resetting ? 'Resetting...' : '🗑️ Reset Application Data (Keep Users)'}
             </Button>
             
             {seeding && seedingSteps.length > 0 && (
@@ -366,10 +398,10 @@ const HomePage = () => {
           </Card>
         </Link>
         
-        <Link to="/statistics" className="block cursor-pointer">
+        <Link to="/tournament" className="block cursor-pointer">
           <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
-            <div className="text-4xl mb-3">📊</div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Statistics</h3>
+            <div className="text-4xl mb-3">🏆</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Tournament</h3>
             {loading ? (
               <p className="text-gray-400 text-sm">Loading...</p>
             ) : (
@@ -377,12 +409,33 @@ const HomePage = () => {
                 <p className="text-3xl font-bold text-orange-600 mb-2">
                   {stats.completedMatches > 0 ? 'View' : '—'}
                 </p>
-                <p className="text-gray-600 text-sm">View player and team performance</p>
+                <p className="text-gray-600 text-sm">Standings, bracket, and results</p>
               </>
             )}
           </Card>
         </Link>
       </div>
+
+      {!loading && stats.totalTeams > 0 && Object.values(leagueGroupsByLeague).some((g) => g.length > 0) && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Tournament groups</h2>
+            <p className="text-gray-600 mt-1">
+              Team placements per league after the group-stage schedule has been generated.
+            </p>
+          </div>
+          {['Expert', 'Intermediate', 'Women']
+            .filter((league) => (leagueGroupsByLeague[league] || []).length > 0)
+            .map((league) => (
+              <GroupAssignmentsTable
+                key={league}
+                groups={leagueGroupsByLeague[league]}
+                league={league}
+                compact
+              />
+            ))}
+        </div>
+      )}
     </div>
   );
 };

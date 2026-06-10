@@ -14,6 +14,16 @@ import {
   generateFinal
 } from '../services/matchService';
 import { getTeams } from '../services/teamService';
+import { getTournamentSetup } from '../services/tournamentService';
+import TournamentSetupPanel from '../components/molecules/TournamentSetupPanel/TournamentSetupPanel';
+
+const LEAGUES = [
+  { value: 'Expert', label: 'Expert League' },
+  { value: 'Intermediate', label: 'Intermediate League' },
+  { value: 'Women', label: 'Women League' }
+];
+
+const getLeague = (item) => item.league || 'Expert';
 
 const MatchesPage = () => {
   const { isAdmin } = useAuth();
@@ -28,11 +38,46 @@ const MatchesPage = () => {
   const [generatingQF, setGeneratingQF] = useState(false);
   const [generatingSF, setGeneratingSF] = useState(false);
   const [generatingFinal, setGeneratingFinal] = useState(false);
+  const [selectedLeague, setSelectedLeague] = useState('Expert');
+  const [setupOptions, setSetupOptions] = useState(null);
+  const [selectedGroupCount, setSelectedGroupCount] = useState(null);
+
+  const leagueTeams = teams.filter(t => getLeague(t) === selectedLeague);
+  const leagueMatches = matches.filter(m => getLeague(m) === selectedLeague);
+  const quarterFinalMatches = leagueMatches.filter((m) => m.round_type === 'Quarter Final');
+  const semiFinalMatches = leagueMatches.filter((m) => m.round_type === 'Semi Final');
+  const skipsSemiFinals = setupOptions?.defaultGroupCount === 2;
+  const quarterFinalsComplete =
+    quarterFinalMatches.length > 0 &&
+    quarterFinalMatches.every((m) => m.status === 'Completed');
+  const semiFinalsComplete =
+    semiFinalMatches.length === 2 &&
+    semiFinalMatches.every((m) => m.status === 'Completed');
+  const canGenerateFinal =
+    leagueMatches.filter((m) => m.round_type === 'Final').length === 0 &&
+    (semiFinalsComplete || (skipsSemiFinals && quarterFinalMatches.length === 2 && quarterFinalsComplete));
 
   // Load data on mount
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const loadSetup = async () => {
+      try {
+        const setup = await getTournamentSetup(selectedLeague);
+        setSetupOptions(setup);
+        const defaultCount = setup.defaultGroupCount ?? null;
+        setSelectedGroupCount((prev) => {
+          if (prev && setup.validGroupCounts?.includes(prev)) return prev;
+          return defaultCount;
+        });
+      } catch {
+        setSetupOptions(null);
+      }
+    };
+    loadSetup();
+  }, [selectedLeague, teams]);
 
   const loadData = async () => {
     try {
@@ -55,37 +100,77 @@ const MatchesPage = () => {
 
   // Generate match schedule
   const handleGenerateSchedule = async () => {
-    if (teams.length < 8) {
-      setError('Need at least 8 teams to generate schedule');
+    if (!setupOptions?.isValid) {
+      setError(setupOptions?.rejectionReason || 'Cannot generate schedule with current team count.');
       return;
     }
+
+    const groupCount = selectedGroupCount ?? setupOptions.defaultGroupCount;
+    const matchCount =
+      groupCount &&
+      (groupCount *
+        ((setupOptions.teamCount / groupCount) * (setupOptions.teamCount / groupCount - 1))) /
+        2;
 
     const startDate = prompt('Enter start date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
     if (!startDate) return;
 
-    const endDateInput = prompt('Enter end date (YYYY-MM-DD) - Leave empty for no end date:', '');
+    let suggestedEnd = null;
+    try {
+      const hint = await getTournamentSetup(selectedLeague, { startDate, groupCount });
+      suggestedEnd = hint.scheduling?.suggestedEndDate ?? null;
+    } catch {
+      // continue without hint
+    }
+
+    const endPrompt =
+      matchCount > 0
+        ? `Enter end date (YYYY-MM-DD).\n\n${matchCount} matches need ${matchCount} weekday evening slots (6 per day, Mon–Fri).\nSuggested minimum end date: ${suggestedEnd || 'n/a'}\n\nLeave empty for no end date:`
+        : 'Enter end date (YYYY-MM-DD) - Leave empty for no end date:';
+
+    const endDateInput = prompt(endPrompt, suggestedEnd || '');
     const endDate = endDateInput && endDateInput.trim() !== '' ? endDateInput.trim() : null;
 
     if (endDate && new Date(endDate) < new Date(startDate)) {
-      setError('End date must be after start date');
+      setError('End date must be on or after start date');
       return;
     }
 
     const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
 
+    const existingQualifying = leagueMatches.filter((m) => m.round_type === 'Qualifying');
+    const replaceExisting = existingQualifying.length > 0
+      ? window.confirm(
+          `${existingQualifying.length} qualifying match(es) already exist for ${selectedLeague} league. ` +
+          `Replace them with a fresh schedule for all ${setupOptions.teamCount} teams?`
+        )
+      : false;
+
+    if (existingQualifying.length > 0 && !replaceExisting) {
+      return;
+    }
+
     try {
       setGenerating(true);
       setError(null);
 
-      const schedule = await generateMatchSchedule(startDate, endDate, venue);
+      const schedule = await generateMatchSchedule(startDate, endDate, venue, selectedLeague, {
+        groupCount: selectedGroupCount ?? setupOptions.defaultGroupCount,
+        replaceExisting,
+      });
 
-      // Save matches to database
+      if (!schedule.matches?.length) {
+        throw new Error('No matches were returned from the schedule generator.');
+      }
+
       await createMultipleMatches(schedule.matches);
 
-      // Reload matches
       await loadData();
 
       let message = `Schedule generated! ${schedule.matches.length} qualifying matches created.`;
+      if (schedule.expectedMatchCount && schedule.matches.length !== schedule.expectedMatchCount) {
+        message += `\n\nWarning: expected ${schedule.expectedMatchCount} matches.`;
+      }
       if (schedule.data?.dateRange?.totalDays) {
         message += `\n\nDate range: ${startDate} to ${endDate} (${schedule.data.dateRange.totalDays} day(s))`;
       } else if (endDate) {
@@ -108,16 +193,34 @@ const MatchesPage = () => {
     }
   };
 
-  // Filter matches by round
+  // Filter matches by league and round
   const filteredMatches = selectedRound === 'all'
-    ? matches
-    : matches.filter(m => m.round_type === selectedRound);
+    ? leagueMatches
+    : leagueMatches.filter(m => m.round_type === selectedRound);
 
-  // Group matches by pool for qualifying round
-  const qualifyingMatches = {
-    poolA: filteredMatches.filter(m => m.round_type === 'Qualifying' && m.pool === 'A'),
-    poolB: filteredMatches.filter(m => m.round_type === 'Qualifying' && m.pool === 'B')
-  };
+  const groupPools = [
+    ...new Set(
+      leagueMatches
+        .filter((m) => m.round_type === 'Qualifying' && m.pool)
+        .map((m) => m.pool)
+    ),
+  ].sort();
+  const qualifyingMatchesByPool = groupPools.reduce((acc, pool) => {
+    acc[pool] = filteredMatches.filter(m => m.round_type === 'Qualifying' && m.pool === pool);
+    return acc;
+  }, {});
+
+  const qualifyingCount = leagueMatches.filter((m) => m.round_type === 'Qualifying').length;
+  const activeGroupCount = selectedGroupCount ?? setupOptions?.defaultGroupCount;
+  const expectedQualifyingMatches =
+    setupOptions?.isValid && activeGroupCount
+      ? activeGroupCount *
+        (((leagueTeams.length / activeGroupCount) * (leagueTeams.length / activeGroupCount - 1)) / 2)
+      : null;
+  const scheduleMismatch =
+    expectedQualifyingMatches != null &&
+    qualifyingCount > 0 &&
+    qualifyingCount !== expectedQualifyingMatches;
 
   // Handle update result
   const handleUpdateResult = (match) => {
@@ -134,7 +237,7 @@ const MatchesPage = () => {
 
   // Generate Quarter Finals
   const handleGenerateQuarterFinals = async () => {
-    const qualifyingMatches = matches.filter(m => m.round_type === 'Qualifying');
+    const qualifyingMatches = leagueMatches.filter(m => m.round_type === 'Qualifying');
     const completedQualifying = qualifyingMatches.filter(m => m.status === 'Completed');
 
     if (qualifyingMatches.length === 0) {
@@ -147,7 +250,7 @@ const MatchesPage = () => {
       return;
     }
 
-    const existingQF = matches.filter(m => m.round_type === 'Quarter Final');
+    const existingQF = leagueMatches.filter(m => m.round_type === 'Quarter Final');
     if (existingQF.length > 0) {
       setError('Quarter Finals already generated. Delete existing Quarter Final matches to regenerate.');
       return;
@@ -162,7 +265,7 @@ const MatchesPage = () => {
       setGeneratingQF(true);
       setError(null);
 
-      const result = await generateQuarterFinals(startDate, venue);
+      const result = await generateQuarterFinals(startDate, venue, selectedLeague);
       console.log('Quarter Finals generation result:', result);
 
       // Reload matches
@@ -183,7 +286,7 @@ const MatchesPage = () => {
 
   // Generate Semi Finals
   const handleGenerateSemiFinals = async () => {
-    const quarterFinals = matches.filter(m => m.round_type === 'Quarter Final');
+    const quarterFinals = leagueMatches.filter(m => m.round_type === 'Quarter Final');
     const completedQF = quarterFinals.filter(m => m.status === 'Completed');
 
     if (quarterFinals.length === 0) {
@@ -196,7 +299,7 @@ const MatchesPage = () => {
       return;
     }
 
-    const existingSF = matches.filter(m => m.round_type === 'Semi Final');
+    const existingSF = leagueMatches.filter(m => m.round_type === 'Semi Final');
     if (existingSF.length > 0) {
       setError('Semi Finals already generated. Delete existing Semi Final matches to regenerate.');
       return;
@@ -211,7 +314,7 @@ const MatchesPage = () => {
       setGeneratingSF(true);
       setError(null);
 
-      const result = await generateSemiFinals(startDate, venue);
+      const result = await generateSemiFinals(startDate, venue, selectedLeague);
 
       // Reload matches
       await loadData();
@@ -229,20 +332,16 @@ const MatchesPage = () => {
 
   // Generate Final
   const handleGenerateFinal = async () => {
-    const semiFinals = matches.filter(m => m.round_type === 'Semi Final');
-    const completedSF = semiFinals.filter(m => m.status === 'Completed');
-
-    if (semiFinals.length === 0) {
-      setError('No Semi Final matches found. Please generate Semi Finals first.');
+    if (!canGenerateFinal) {
+      if (skipsSemiFinals) {
+        setError('Complete both Quarter Final matches before generating the Final.');
+      } else {
+        setError('Complete all Semi Final matches before generating the Final.');
+      }
       return;
     }
 
-    if (completedSF.length < semiFinals.length) {
-      setError(`Please complete all Semi Final matches first. ${completedSF.length}/${semiFinals.length} completed.`);
-      return;
-    }
-
-    const existingFinal = matches.filter(m => m.round_type === 'Final');
+    const existingFinal = leagueMatches.filter(m => m.round_type === 'Final');
     if (existingFinal.length > 0) {
       setError('Final already generated. Delete existing Final match to regenerate.');
       return;
@@ -257,7 +356,7 @@ const MatchesPage = () => {
       setGeneratingFinal(true);
       setError(null);
 
-      const result = await generateFinal(startDate, venue);
+      const result = await generateFinal(startDate, venue, selectedLeague);
 
       // Reload matches
       await loadData();
@@ -305,7 +404,8 @@ const MatchesPage = () => {
     { value: 'Qualifying', label: 'Qualifying Round' },
     { value: 'Quarter Final', label: 'Quarter Finals' },
     { value: 'Semi Final', label: 'Semi Finals' },
-    { value: 'Final', label: 'Final' }
+    { value: 'Final', label: 'Final' },
+    { value: 'Third Place', label: 'Third Place' }
   ];
 
   return (
@@ -318,28 +418,55 @@ const MatchesPage = () => {
             Tournament match schedule and results
           </p>
         </div>
-        {isAdmin && (
+      </div>
+
+      {scheduleMismatch && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+          <p className="font-medium">Schedule does not match your team count</p>
+          <p className="mt-1">
+            {leagueTeams.length} teams in {selectedLeague} league need{' '}
+            <strong>{expectedQualifyingMatches}</strong> qualifying matches ({activeGroupCount} groups), but only{' '}
+            <strong>{qualifyingCount}</strong> are scheduled. Regenerate the group stage to include every team.
+          </p>
+        </div>
+      )}
+
+      {isAdmin && (qualifyingCount === 0 || scheduleMismatch) && (
+        <TournamentSetupPanel
+          setupOptions={setupOptions}
+          selectedGroupCount={selectedGroupCount}
+          onGroupCountChange={setSelectedGroupCount}
+          onGenerate={handleGenerateSchedule}
+          generating={generating}
+          isAdmin={isAdmin}
+        />
+      )}
+
+      {/* League Selector */}
+      <div className="flex gap-2 flex-wrap">
+        {LEAGUES.map(league => (
           <Button
-            onClick={handleGenerateSchedule}
-            variant="primary"
-            disabled={generating || teams.length < 8}
+            key={league.value}
+            onClick={() => setSelectedLeague(league.value)}
+            variant={selectedLeague === league.value ? 'primary' : 'outline'}
+            size="sm"
           >
-            {generating ? 'Generating...' : '📅 Generate Schedule'}
+            {league.label}
           </Button>
-        )}
+        ))}
       </div>
 
       {/* Requirements */}
-      {teams.length < 8 && (
+      {setupOptions && !setupOptions.isValid && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">
-            <strong>Note:</strong> You need at least 8 teams to generate a schedule. Currently you have {teams.length} teams.
+            <strong>Note:</strong> {setupOptions.rejectionReason}
           </p>
         </div>
       )}
 
       {/* Round Filter */}
-      {matches.length > 0 && (
+      {leagueMatches.length > 0 && (
         <div className="flex gap-2 flex-wrap">
           {rounds.map(round => (
             <Button
@@ -357,9 +484,9 @@ const MatchesPage = () => {
 
       {/* Generate Quarter Finals Button */}
       {selectedRound === 'Qualifying' &&
-        matches.filter(m => m.round_type === 'Qualifying').length > 0 &&
-        matches.filter(m => m.round_type === 'Qualifying').every(m => m.status === 'Completed') &&
-        matches.filter(m => m.round_type === 'Quarter Final').length === 0 && (
+        leagueMatches.filter(m => m.round_type === 'Qualifying').length > 0 &&
+        leagueMatches.filter(m => m.round_type === 'Qualifying').every(m => m.status === 'Completed') &&
+        leagueMatches.filter(m => m.round_type === 'Quarter Final').length === 0 && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -367,7 +494,7 @@ const MatchesPage = () => {
                   ✅ All qualifying matches completed!
                 </p>
                 <p className="text-green-600 text-sm mt-1">
-                  Top 4 teams from each pool are ready. Generate Quarter Finals to proceed.
+                  Top 2 teams from each group are ready. Generate Quarter Finals to proceed.
                 </p>
               </div>
               {isAdmin && (
@@ -383,11 +510,11 @@ const MatchesPage = () => {
           </div>
         )}
 
-      {/* Generate Semi Finals Button */}
+      {/* Generate Semi Finals Button (4-group knockout) */}
       {selectedRound === 'Quarter Final' &&
-        matches.filter(m => m.round_type === 'Quarter Final').length > 0 &&
-        matches.filter(m => m.round_type === 'Quarter Final').every(m => m.status === 'Completed') &&
-        matches.filter(m => m.round_type === 'Semi Final').length === 0 && (
+        quarterFinalMatches.length === 4 &&
+        quarterFinalsComplete &&
+        semiFinalMatches.length === 0 && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -411,19 +538,22 @@ const MatchesPage = () => {
           </div>
         )}
 
-      {/* Generate Final Button */}
-      {selectedRound === 'Semi Final' &&
-        matches.filter(m => m.round_type === 'Semi Final').length > 0 &&
-        matches.filter(m => m.round_type === 'Semi Final').every(m => m.status === 'Completed') &&
-        matches.filter(m => m.round_type === 'Final').length === 0 && (
+      {/* Generate Final (from Semi Finals or directly after 2 Quarter Finals) */}
+      {canGenerateFinal &&
+        (selectedRound === 'Semi Final' ||
+          (selectedRound === 'Quarter Final' && skipsSemiFinals && quarterFinalMatches.length === 2)) && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-green-800 font-medium">
-                  ✅ All Semi Final matches completed!
+                  {semiFinalsComplete
+                    ? '✅ All Semi Final matches completed!'
+                    : '✅ All Quarter Final matches completed!'}
                 </p>
                 <p className="text-green-600 text-sm mt-1">
-                  Top 2 teams are ready. Generate Final to determine the champion.
+                  {skipsSemiFinals && quarterFinalMatches.length === 2
+                    ? 'Top 2 teams are ready. Generate the Final (this league skips Semi Finals).'
+                    : 'Top 2 teams are ready. Generate Final to determine the champion.'}
                 </p>
               </div>
               {isAdmin && (
@@ -454,7 +584,7 @@ const MatchesPage = () => {
       )}
 
       {/* Matches Display */}
-      {!loading && matches.length === 0 && (
+      {!loading && leagueMatches.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <div className="text-6xl mb-4">🏓</div>
           <p className="text-gray-600 text-lg mb-2">No matches scheduled yet</p>
@@ -467,47 +597,34 @@ const MatchesPage = () => {
       {/* Qualifying Round - Show by Pool */}
       {!loading && selectedRound === 'Qualifying' && (
         <div className="space-y-6">
-          {!loading && qualifyingMatches.poolA.length > 0 && (
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Pool A Matches</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
-                {qualifyingMatches.poolA.map((match) => (
-                  <MatchCard
-                    key={match.id}
-                    match={match}
-                    onUpdateResult={handleUpdateResult}
-                    isAdmin={isAdmin}
-                  />
-                ))}
+          {groupPools.map((pool) =>
+            qualifyingMatchesByPool[pool]?.length > 0 ? (
+              <div key={pool}>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Group {pool} Matches</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
+                  {qualifyingMatchesByPool[pool].map((match) => (
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      onUpdateResult={handleUpdateResult}
+                      isAdmin={isAdmin}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-
-          {!loading && qualifyingMatches.poolB.length > 0 && (
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Pool B Matches</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
-                {qualifyingMatches.poolB.map((match) => (
-                  <MatchCard
-                    key={match.id}
-                    match={match}
-                    onUpdateResult={handleUpdateResult}
-                    isAdmin={isAdmin}
-                  />
-                ))}
-              </div>
-            </div>
+            ) : null
           )}
         </div>
       )}
 
       {/* Quarter Finals, Semi Finals, and Final - Show all matches */}
-      {!loading && ['Quarter Final', 'Semi Final', 'Final'].includes(selectedRound) && filteredMatches.length > 0 && (
+      {!loading && ['Quarter Final', 'Semi Final', 'Final', 'Third Place'].includes(selectedRound) && filteredMatches.length > 0 && (
         <div>
           <h3 className="text-2xl font-bold text-gray-900 mb-4">
             {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
             {selectedRound === 'Semi Final' && 'Semi Final Matches'}
             {selectedRound === 'Final' && 'Final Match'}
+            {selectedRound === 'Third Place' && 'Third Place Match'}
           </h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
             {filteredMatches.map((match) => (
@@ -522,7 +639,7 @@ const MatchesPage = () => {
       )}
 
       {/* No matches for selected round */}
-      {!loading && ['Quarter Final', 'Semi Final', 'Final'].includes(selectedRound) && filteredMatches.length === 0 && (
+      {!loading && ['Quarter Final', 'Semi Final', 'Final', 'Third Place'].includes(selectedRound) && filteredMatches.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <div className="text-6xl mb-4">🏓</div>
           <p className="text-gray-600 text-lg mb-2">No {selectedRound.toLowerCase()} matches yet</p>

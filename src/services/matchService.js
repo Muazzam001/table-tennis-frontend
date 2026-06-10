@@ -22,12 +22,13 @@ export const getMatchesByRound = async (roundType) => {
 };
 
 // Get team standings
-export const getTeamStandings = async (pool = null, roundType = null) => {
+export const getTeamStandings = async (pool = null, roundType = null, league = null) => {
   try {
     const params = new URLSearchParams();
     if (pool) params.append('pool', pool);
     if (roundType) params.append('roundType', roundType);
-    
+    if (league) params.append('league', league);
+
     const response = await api.get(`/matches/standings?${params.toString()}`);
     return response.data || [];
   } catch (error) {
@@ -66,15 +67,42 @@ export const createMultipleMatches = async (matches) => {
 };
 
 // Generate match schedule
-export const generateMatchSchedule = async (startDate, endDate, venue) => {
+export const generateMatchSchedule = async (startDate, endDate, venue, league, options = {}) => {
   try {
+    const { format = 'groups', groupCount, replaceExisting } = options;
     const response = await api.post('/matches/generate-schedule', {
       startDate,
       endDate: endDate || null,
       venue: venue || 'Main Court',
-      daysBetweenRounds: 1
+      league,
+      format,
+      groupCount,
+      replaceExisting: Boolean(replaceExisting),
     });
-    return response.data || response;
+    const payload = response.data || response;
+    const matches = payload.matches ?? response.data?.matches ?? [];
+    const config = payload.config ?? response.data?.config;
+    return {
+      ...response,
+      matches,
+      config,
+      groups: payload.groups ?? response.data?.groups,
+      expectedMatchCount: payload.expectedMatchCount ?? response.data?.expectedMatchCount,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Generate Third Place match
+export const generateThirdPlace = async (startDate, venue, league) => {
+  try {
+    const response = await api.post('/matches/generate-third-place', {
+      startDate,
+      venue: venue || 'Main Court',
+      league,
+    });
+    return response;
   } catch (error) {
     throw error;
   }
@@ -91,11 +119,12 @@ export const updateMatchResult = async (id, resultData) => {
 };
 
 // Generate Quarter Finals
-export const generateQuarterFinals = async (startDate, venue) => {
+export const generateQuarterFinals = async (startDate, venue, league) => {
   try {
     const response = await api.post('/matches/generate-quarter-finals', {
       startDate,
-      venue: venue || 'Main Court'
+      venue: venue || 'Main Court',
+      league
     });
     // API interceptor already returns response.data, so response is the data object
     console.log('generateQuarterFinals response:', response);
@@ -106,11 +135,12 @@ export const generateQuarterFinals = async (startDate, venue) => {
 };
 
 // Generate Semi Finals
-export const generateSemiFinals = async (startDate, venue) => {
+export const generateSemiFinals = async (startDate, venue, league) => {
   try {
     const response = await api.post('/matches/generate-semi-finals', {
       startDate,
-      venue: venue || 'Main Court'
+      venue: venue || 'Main Court',
+      league
     });
     // API interceptor already returns response.data, so response is the data object
     return response;
@@ -120,11 +150,12 @@ export const generateSemiFinals = async (startDate, venue) => {
 };
 
 // Generate Final
-export const generateFinal = async (startDate, venue) => {
+export const generateFinal = async (startDate, venue, league) => {
   try {
     const response = await api.post('/matches/generate-final', {
       startDate,
-      venue: venue || 'Main Court'
+      venue: venue || 'Main Court',
+      league
     });
     // API interceptor already returns response.data, so response is the data object
     return response;

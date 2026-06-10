@@ -1,50 +1,54 @@
 import Badge from '../../atoms/Badge';
+import TeamNameEditor from '../TeamNameEditor/TeamNameEditor';
+import { getLeagueLabel, resolveTeamLeague } from '../../../utils/teamNaming';
 
-// Component to display a team in preview mode (editable name, not saved yet)
 const TeamCardPreview = ({ team, onNameChange, index }) => {
-  // Determine which player is Intermediate and which is Expert
-  const intermediatePlayer = team.player1_expertise === 'Intermediate' 
-    ? { name: team.player1_name, id: team.player1_id }
-    : { name: team.player2_name, id: team.player2_id };
-  
-  const expertPlayer = team.player1_expertise === 'Expert'
-    ? { name: team.player1_name, id: team.player1_id }
-    : { name: team.player2_name, id: team.player2_id };
+  const league = resolveTeamLeague(team);
+  const teamNumber = index + 1;
+
+  const leagueBadge = (() => {
+    const label = getLeagueLabel(league);
+    if (league === 'Expert') return <Badge variant="expert">{label}</Badge>;
+    if (league === 'Intermediate') return <Badge variant="intermediate">{label}</Badge>;
+    if (league === 'Women') return <Badge variant="secondary">{label}</Badge>;
+    return <Badge variant="primary">{label}</Badge>;
+  })();
+
+  const players = [
+    { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
+    { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
+  ];
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 border-2 border-dashed border-blue-300 hover:border-blue-400 transition-colors">
       <div className="flex flex-col gap-4">
-        {/* Editable Team Name */}
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Team Name
-          </label>
-          <input
-            type="text"
-            value={team.team_name}
-            onChange={(e) => onNameChange(index, e.target.value)}
-            placeholder={`Team ${index + 1}`}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 font-semibold"
-          />
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <TeamNameEditor
+              id={`preview-team-name-${index}`}
+              teamName={team.team_name}
+              fallbackNumber={teamNumber}
+              onChange={(name) => onNameChange(index, name)}
+            />
+          </div>
+          {leagueBadge}
         </div>
-        
-        {/* Players */}
+
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex-1">
-              <p className="font-medium text-gray-900">{intermediatePlayer.name}</p>
-              <p className="text-xs text-gray-600">Player ID: {intermediatePlayer.id}</p>
+          {players.map((p, idx) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+            >
+              <div className="flex-1">
+                <p className="font-medium text-gray-900">{p.name}</p>
+                <p className="text-xs text-gray-600">Player ID: {p.id}</p>
+              </div>
+              <Badge variant={p.expertise === 'Expert' ? 'expert' : 'intermediate'}>
+                {p.expertise}
+              </Badge>
             </div>
-            <Badge variant="intermediate">Intermediate</Badge>
-          </div>
-          
-          <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <div className="flex-1">
-              <p className="font-medium text-gray-900">{expertPlayer.name}</p>
-              <p className="text-xs text-gray-600">Player ID: {expertPlayer.id}</p>
-            </div>
-            <Badge variant="expert">Expert</Badge>
-          </div>
+          ))}
         </div>
       </div>
     </div>
@@ -52,4 +56,3 @@ const TeamCardPreview = ({ team, onNameChange, index }) => {
 };
 
 export default TeamCardPreview;
-

@@ -33,7 +33,7 @@ const MatchCard = ({ match, onUpdateResult, showActions = true, isAdmin = false 
               {match.round_type}
             </Badge>
             {match.pool && (
-              <Badge variant="default">Pool {match.pool}</Badge>
+              <Badge variant="default">Group {match.pool}</Badge>
             )}
           </div>
           <Badge variant={match.status === 'Completed' ? 'success' : 'warning'}>

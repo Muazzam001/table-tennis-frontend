@@ -12,7 +12,7 @@ const Navigation = () => {
     { path: '/players', label: 'Players', icon: '👥' },
     { path: '/teams', label: 'Teams', icon: '🤝' },
     { path: '/matches', label: 'Matches', icon: '⚔️' },
-    { path: '/statistics', label: 'Statistics', icon: '📊' },
+    { path: '/tournament', label: 'Tournament', icon: '🏆' },
   ];
   
   const isActive = (path) => {

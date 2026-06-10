@@ -75,8 +75,8 @@ const sanitizeErrorMessage = (message) => {
   // Remove database names (e.g., "table_tennis_tournament")
   message = message.replace(/table_tennis_tournament/gi, 'database');
   
-  // Remove table names (players, teams, matches, statistics, match_details)
-  message = message.replace(/\b(players|teams|matches|statistics|match_details)\b/gi, 'table');
+  // Remove DB table names in SQL errors only (keep plain English e.g. "42 matches")
+  message = message.replace(/\b(players|teams|statistics|match_details)\b/gi, 'table');
   
   // Remove common MySQL error patterns with table names
   message = message.replace(/Table\s+['"]?[\w_]+['"]?\s+doesn't exist/gi, 'Required table does not exist');

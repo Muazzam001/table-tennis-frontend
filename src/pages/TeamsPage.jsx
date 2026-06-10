@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Button from '../components/atoms/Button';
 import TeamCard from '../components/molecules/TeamCard';
 import TeamCardPreview from '../components/molecules/TeamCardPreview';
+import LeagueTabs from '../components/molecules/LeagueTabs';
+import GroupAssignmentsTable from '../components/molecules/GroupAssignmentsTable';
 import { useAuth } from '../contexts/AuthContext';
-import { getTeams, saveTeams, deleteTeam } from '../services/teamService';
+import { getTeams, saveTeams, deleteTeam, updateTeam } from '../services/teamService';
+import { buildDefaultTeamName, resolveTeamLeague } from '../utils/teamNaming';
 import { getPlayers } from '../services/playerService';
+import { getLeagueGroups } from '../services/tournamentService';
 
 const TeamsPage = () => {
   const { isAdmin } = useAuth();
@@ -16,12 +21,16 @@ const TeamsPage = () => {
   // State for preview teams (not saved yet)
   const [previewTeams, setPreviewTeams] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [selectedLeague, setSelectedLeague] = useState('Expert');
+  const [leagueGroups, setLeagueGroups] = useState([]);
+  const [teamGroupMap, setTeamGroupMap] = useState({});
 
   // State for player counts (to show requirements)
   const [playerStats, setPlayerStats] = useState({
     total: 0,
-    intermediate: 0,
-    expert: 0,
+    expertMen: 0,
+    intermediateMen: 0,
+    women: 0,
     players: [] // Store full player list for generation
   });
 
@@ -30,6 +39,22 @@ const TeamsPage = () => {
     loadTeams();
     loadPlayerStats();
   }, []);
+
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        const data = await getLeagueGroups(selectedLeague);
+        setLeagueGroups(data?.groups || []);
+        setTeamGroupMap(data?.teamGroupMap || {});
+      } catch {
+        setLeagueGroups([]);
+        setTeamGroupMap({});
+      }
+    };
+    if (teams.length > 0) {
+      loadGroups();
+    }
+  }, [selectedLeague, teams]);
 
   // Function to fetch all teams from API
   const loadTeams = async () => {
@@ -50,13 +75,15 @@ const TeamsPage = () => {
   const loadPlayerStats = async () => {
     try {
       const players = await getPlayers();
-      const intermediate = players.filter(p => p.expertise_level === 'Intermediate').length;
-      const expert = players.filter(p => p.expertise_level === 'Expert').length;
+      const expertMen = players.filter(p => p.expertise_level === 'Expert' && (p.category === 'Men' || !p.category)).length;
+      const intermediateMen = players.filter(p => p.expertise_level === 'Intermediate' && (p.category === 'Men' || !p.category)).length;
+      const women = players.filter(p => p.category === 'Women').length;
 
       setPlayerStats({
         total: players.length,
-        intermediate,
-        expert,
+        expertMen,
+        intermediateMen,
+        women,
         players // Store players for team generation
       });
     } catch (err) {
@@ -76,27 +103,67 @@ const TeamsPage = () => {
 
   // Generate teams locally (preview mode - not saved to DB)
   const generateTeamsLocally = () => {
-    const { players, intermediate, expert } = playerStats;
+    const { players } = playerStats;
 
-    // Split players by expertise
-    const intermediatePlayers = players.filter(p => p.expertise_level === 'Intermediate');
-    const expertPlayers = players.filter(p => p.expertise_level === 'Expert');
+    // Split players by league buckets
+    const expertMenPlayers = players.filter(
+      p => p.expertise_level === 'Expert' && (p.category === 'Men' || !p.category)
+    );
+    const intermediateMenPlayers = players.filter(
+      p => p.expertise_level === 'Intermediate' && (p.category === 'Men' || !p.category)
+    );
+    const womenPlayers = players.filter(p => p.category === 'Women');
 
-    // Shuffle players randomly
-    const shuffledIntermediate = shuffleArray(intermediatePlayers);
-    const shuffledExpert = shuffleArray(expertPlayers);
+    // Shuffle each bucket
+    const shuffledExpertMen = shuffleArray(expertMenPlayers);
+    const shuffledIntermediateMen = shuffleArray(intermediateMenPlayers);
+    const shuffledWomen = shuffleArray(womenPlayers);
 
-    // Create teams - one Intermediate + one Expert per team
+    // Create teams within the same league/category
     const generatedTeams = [];
-    for (let i = 0; i < intermediate; i++) {
+    // Expert League (Men)
+    for (let i = 0; i + 1 < shuffledExpertMen.length; i += 2) {
+      const p1 = shuffledExpertMen[i];
+      const p2 = shuffledExpertMen[i + 1];
       generatedTeams.push({
-        team_name: `Team ${i + 1}`,
-        player1_id: shuffledIntermediate[i].id,
-        player1_name: shuffledIntermediate[i].name,
-        player1_expertise: 'Intermediate',
-        player2_id: shuffledExpert[i].id,
-        player2_name: shuffledExpert[i].name,
-        player2_expertise: 'Expert'
+        team_name: buildDefaultTeamName(Math.floor(i / 2) + 1),
+        player1_id: p1.id,
+        player1_name: p1.name,
+        player1_expertise: p1.expertise_level,
+        player2_id: p2.id,
+        player2_name: p2.name,
+        player2_expertise: p2.expertise_level,
+        league: 'Expert'
+      });
+    }
+    // Intermediate League (Men)
+    for (let i = 0; i + 1 < shuffledIntermediateMen.length; i += 2) {
+      const p1 = shuffledIntermediateMen[i];
+      const p2 = shuffledIntermediateMen[i + 1];
+      generatedTeams.push({
+        team_name: buildDefaultTeamName(Math.floor(i / 2) + 1),
+        player1_id: p1.id,
+        player1_name: p1.name,
+        player1_expertise: p1.expertise_level,
+        player2_id: p2.id,
+        player2_name: p2.name,
+        player2_expertise: p2.expertise_level,
+        league: 'Intermediate'
+      });
+    }
+    // Women League
+    for (let i = 0; i + 1 < shuffledWomen.length; i += 2) {
+      const p1 = shuffledWomen[i];
+      const p2 = shuffledWomen[i + 1];
+      generatedTeams.push({
+        team_name: buildDefaultTeamName(Math.floor(i / 2) + 1),
+        player1_id: p1.id,
+        player1_name: p1.name,
+        player1_expertise: p1.expertise_level,
+        player2_id: p2.id,
+        player2_name: p2.name,
+        player2_expertise: p2.expertise_level,
+        league: 'Women'
       });
     }
 
@@ -111,15 +178,14 @@ const TeamsPage = () => {
       return;
     }
 
-    if (playerStats.total % 2 !== 0) {
-      setError(`Cannot generate teams. You have ${playerStats.total} players. Need an even number of players.`);
-      return;
-    }
-
-    if (playerStats.intermediate !== playerStats.expert) {
+    // Determine if at least one league has an even count and enough players
+    const expertOk = playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0;
+    const intermediateOk = playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0;
+    const womenOk = playerStats.women >= 2 && playerStats.women % 2 === 0;
+    if (!expertOk && !intermediateOk && !womenOk) {
       setError(
-        `Cannot generate teams. You have ${playerStats.intermediate} Intermediate and ${playerStats.expert} Expert players. ` +
-        `Need equal numbers of each (one Intermediate + one Expert per team).`
+        `Cannot generate teams. Need even numbers per league with at least 2 players. ` +
+        `Expert: ${playerStats.expertMen}, Intermediate: ${playerStats.intermediateMen}, Women: ${playerStats.women}`
       );
       return;
     }
@@ -209,6 +275,21 @@ const TeamsPage = () => {
     }
   };
 
+  const handleSaveTeamName = async (teamId, teamName) => {
+    if (!teamName?.trim()) {
+      setError('Team name cannot be empty');
+      return;
+    }
+    try {
+      setError(null);
+      await updateTeam(teamId, { team_name: teamName.trim() });
+      await loadTeams();
+    } catch (err) {
+      setError(err.message || 'Failed to update team name');
+      throw err;
+    }
+  };
+
   // Handle delete team
   const handleDelete = async (teamId) => {
     if (window.confirm('Are you sure you want to delete this team?')) {
@@ -223,10 +304,35 @@ const TeamsPage = () => {
   };
 
   // Check if team generation is possible
-  const canGenerateTeams =
-    playerStats.total > 0 &&
-    playerStats.total % 2 === 0 &&
-    playerStats.intermediate === playerStats.expert;
+  const canGenerateTeams = (() => {
+    if (playerStats.total <= 0) return false;
+    const expertOk = playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0;
+    const intermediateOk = playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0;
+    const womenOk = playerStats.women >= 2 && playerStats.women % 2 === 0;
+    return expertOk || intermediateOk || womenOk;
+  })();
+
+  const teamsByLeague = (league) =>
+    teams.filter((team) => resolveTeamLeague(team) === league);
+
+  const previewByLeague = (league) =>
+    previewTeams.filter((team) => resolveTeamLeague(team) === league);
+
+  const leagueTeamCounts = {
+    Expert: teamsByLeague('Expert').length,
+    Intermediate: teamsByLeague('Intermediate').length,
+    Women: teamsByLeague('Women').length,
+  };
+
+  const activeTeams = teamsByLeague(selectedLeague);
+  const activePreviewTeams = previewByLeague(selectedLeague);
+
+  const getPreviewIndex = (leagueTeam) =>
+    previewTeams.findIndex(
+      (team) =>
+        team.player1_id === leagueTeam.player1_id &&
+        team.player2_id === leagueTeam.player2_id
+    );
 
   return (
     <div className="space-y-6">
@@ -253,34 +359,60 @@ const TeamsPage = () => {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-semibold text-blue-900 mb-2">Team Generation Requirements:</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li className={playerStats.total % 2 === 0 ? 'text-green-700' : 'text-red-700'}>
-            ✓ Even number of players: {playerStats.total} {playerStats.total % 2 === 0 ? '✓' : '✗'}
+          <li className={(playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
+            ✓ Expert League (Men): {playerStats.expertMen} players {playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0 ? '✓' : '✗'} (need even, ≥ 2)
           </li>
-          <li className={playerStats.intermediate === playerStats.expert ? 'text-green-700' : 'text-red-700'}>
-            ✓ Equal Intermediate & Expert: {playerStats.intermediate} Intermediate, {playerStats.expert} Expert
-            {playerStats.intermediate === playerStats.expert ? ' ✓' : ' ✗'}
+          <li className={(playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
+            ✓ Intermediate League (Men): {playerStats.intermediateMen} players {playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0 ? '✓' : '✗'} (need even, ≥ 2)
+          </li>
+          <li className={(playerStats.women >= 2 && playerStats.women % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
+            ✓ Women League: {playerStats.women} players {playerStats.women >= 2 && playerStats.women % 2 === 0 ? '✓' : '✗'} (need even, ≥ 2)
           </li>
           <li className="text-blue-700">
-            → Each team will have: 1 Intermediate + 1 Expert player
+            → Teams are formed within the same league only (no mixed levels)
           </li>
         </ul>
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <div className="text-sm text-gray-600">Total Teams</div>
           <div className="text-2xl font-bold text-gray-900">{teams.length}</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Intermediate Players</div>
-          <div className="text-2xl font-bold text-blue-600">{playerStats.intermediate}</div>
+          <div className="text-sm text-gray-600">Expert Teams</div>
+          <div className="text-2xl font-bold text-purple-600">{leagueTeamCounts.Expert}</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Expert Players</div>
-          <div className="text-2xl font-bold text-purple-600">{playerStats.expert}</div>
+          <div className="text-sm text-gray-600">Intermediate Teams</div>
+          <div className="text-2xl font-bold text-blue-600">{leagueTeamCounts.Intermediate}</div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+          <div className="text-sm text-gray-600">Women Teams</div>
+          <div className="text-2xl font-bold text-pink-600">{leagueTeamCounts.Women}</div>
         </div>
       </div>
+
+      <LeagueTabs
+        selected={selectedLeague}
+        onChange={setSelectedLeague}
+        counts={leagueTeamCounts}
+      />
+
+      {!loading && activeTeams.length > 0 && leagueGroups.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-900">
+          Group assignments appear after you generate the group-stage schedule on the{' '}
+          <Link to="/matches" className="font-medium underline">
+            Matches page
+          </Link>
+          .
+        </div>
+      )}
+
+      {!loading && leagueGroups.length > 0 && (
+        <GroupAssignmentsTable groups={leagueGroups} league={selectedLeague} />
+      )}
 
       {/* Preview Section */}
       {previewTeams.length > 0 && (
@@ -311,16 +443,25 @@ const TeamsPage = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {previewTeams.map((team, index) => (
-              <TeamCardPreview
-                key={index}
-                team={team}
-                index={index}
-                onNameChange={handleTeamNameChange}
-              />
-            ))}
-          </div>
+          {activePreviewTeams.length === 0 ? (
+            <div className="text-center py-8 text-yellow-800">
+              No preview teams for {selectedLeague} league.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activePreviewTeams.map((team) => {
+                const index = getPreviewIndex(team);
+                return (
+                  <TeamCardPreview
+                    key={`${team.player1_id}-${team.player2_id}`}
+                    team={team}
+                    index={index}
+                    onNameChange={handleTeamNameChange}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -338,39 +479,53 @@ const TeamsPage = () => {
         </div>
       )}
 
-      {/* Empty State */}
-      {!loading && teams.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <div className="text-6xl mb-4">🏓</div>
-          <p className="text-gray-600 text-lg mb-2">No teams created yet</p>
-          <p className="text-gray-500 text-sm mb-6">
-            Click "Generate Random Teams" to automatically create teams
-          </p>
-          {!canGenerateTeams && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
-              <p className="text-yellow-800 text-sm">
-                {playerStats.total === 0 && 'Add players first'}
-                {playerStats.total > 0 && playerStats.total % 2 !== 0 && 'Need even number of players'}
-                {playerStats.total > 0 && playerStats.total % 2 === 0 && playerStats.intermediate !== playerStats.expert &&
-                  'Need equal numbers of Intermediate and Expert players'}
+      {/* Teams Grid */}
+      {!loading && (
+        <>
+          {teams.length === 0 && (
+            <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+              <div className="text-6xl mb-4">🏓</div>
+              <p className="text-gray-600 text-lg mb-2">No teams created yet</p>
+              <p className="text-gray-500 text-sm mb-6">
+                Click "Generate Random Teams" to automatically create teams
+              </p>
+              {!canGenerateTeams && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
+                  <p className="text-yellow-800 text-sm">
+                    {playerStats.total === 0 && 'Add players first'}
+                    {playerStats.total > 0 && 'Need even numbers within at least one league (Expert Men, Intermediate Men, or Women)'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {teams.length > 0 && activeTeams.length === 0 && (
+            <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+              <p className="text-gray-600 text-lg mb-2">
+                No teams in {selectedLeague} league
+              </p>
+              <p className="text-gray-500 text-sm">
+                Switch tabs to view teams from another league
               </p>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Teams Grid */}
-      {!loading && teams.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
-          {teams.map((team) => (
-            <TeamCard
-              key={team.id}
-              team={team}
-              onDelete={handleDelete}
-              isAdmin={isAdmin}
-            />
-          ))}
-        </div>
+          {activeTeams.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
+              {activeTeams.map((team) => (
+                <TeamCard
+                  key={team.id}
+                  team={team}
+                  groupId={teamGroupMap[team.id]}
+                  onDelete={handleDelete}
+                  onSaveName={isAdmin ? handleSaveTeamName : undefined}
+                  isAdmin={isAdmin}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

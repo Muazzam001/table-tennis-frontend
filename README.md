@@ -24,8 +24,10 @@ This is the frontend application for the Table Tennis Tournament Management Syst
 
 - **Player Management**: Add, edit, and manage players with expertise levels
 - **Team Management**: Create teams with smart pairing (one Intermediate + one Expert)
+- **Tournament View**: Flexible group stage, standings, knockout bracket (`/tournament`)
 - **Match Management**: Schedule matches and record results
-- **Statistics Dashboard**: View player and team statistics
+- **Statistics Dashboard**: Per-group standings and knockout summaries
+- **Admin Reset**: Clear tournament data while keeping user accounts
 - **Authentication**: Secure login system
 - **Responsive Design**: Works on desktop and mobile devices
 - **Modern UI**: Built with Tailwind CSS v4
@@ -55,12 +57,15 @@ frontend/
 │   │   ├── PlayersPage.jsx
 │   │   ├── TeamsPage.jsx
 │   │   ├── MatchesPage.jsx
+│   │   ├── TournamentPage.jsx
 │   │   └── StatisticsPage.jsx
 │   ├── services/          # API service functions
 │   │   ├── authService.js
 │   │   ├── playerService.js
 │   │   ├── teamService.js
 │   │   ├── matchService.js
+│   │   ├── tournamentService.js
+│   │   ├── adminService.js
 │   │   ├── statisticsService.js
 │   │   └── seedService.js
 │   ├── utils/             # Utility functions
@@ -262,6 +267,8 @@ API calls are organized in service files (`src/services/`):
 - `playerService.js` - Player operations
 - `teamService.js` - Team operations
 - `matchService.js` - Match operations
+- `tournamentService.js` - Tournament overview & setup
+- `adminService.js` - Application reset
 - `statisticsService.js` - Statistics
 - `seedService.js` - Database seeding
 
@@ -309,6 +316,7 @@ The app includes authentication using React Context:
 | Players | `/players` | Player management |
 | Teams | `/teams` | Team management |
 | Matches | `/matches` | Match scheduling and results |
+| Tournament | `/tournament` | Group standings, fixtures, knockout bracket |
 | Statistics | `/statistics` | Statistics dashboard |
 
 ## 🐛 Troubleshooting
