@@ -1,7 +1,7 @@
 // API service functions for player operations
 // This file contains all functions that communicate with the backend API for players
 
-import api from '../utils/api.js';
+import api from '@/utils/api.js';
 
 // Get all active players
 export const getPlayers = async () => {

@@ -1,5 +1,5 @@
 /**
- * Editable team name only (league is shown separately on the card badge).
+ * Editable team name only (division is shown separately on the card badge).
  */
 const TeamNameEditor = ({
   teamName,

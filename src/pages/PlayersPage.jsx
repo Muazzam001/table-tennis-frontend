@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import Button from '../components/atoms/Button';
-import PlayerCard from '../components/molecules/PlayerCard';
-import PlayerForm from '../components/molecules/PlayerForm';
-import LeagueTabs from '../components/molecules/LeagueTabs';
-import { useAuth } from '../contexts/AuthContext';
-import { getPlayers, createPlayer, updatePlayer, deletePlayer } from '../services/playerService';
+import Button from '@/components/atoms/Button';
+import PlayerCard from '@/components/molecules/PlayerCard';
+import PlayerForm from '@/components/molecules/PlayerForm';
+import DivisionTabs from '@/components/molecules/DivisionTabs';
+import { useAuth } from '@/contexts/AuthContext';
+import { getPlayers, createPlayer, updatePlayer, deletePlayer } from '@/services/playerService';
+import { showConfirm } from '@/utils/sweetAlert';
 
 const PlayersPage = () => {
   const { isAdmin } = useAuth();
@@ -16,7 +17,7 @@ const PlayersPage = () => {
   // State for form modal
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
-  const [selectedLeague, setSelectedLeague] = useState('Expert');
+  const [selectedDivision, setSelectedDivision] = useState('Expert');
 
   // Load players when component mounts
   useEffect(() => {
@@ -67,15 +68,21 @@ const PlayersPage = () => {
 
   // Handle delete button click
   const handleDelete = async (playerId) => {
-    // Confirm before deleting
-    if (window.confirm('Are you sure you want to delete this player?')) {
-      try {
-        await deletePlayer(playerId);
-        loadPlayers(); // Reload list after deletion
-      } catch (err) {
-        setError(err.message || 'Failed to delete player');
-        console.error('Error deleting player:', err);
-      }
+    const confirmed = await showConfirm({
+      title: 'Delete player?',
+      text: 'Are you sure you want to delete this player?',
+      confirmText: 'Delete',
+      icon: 'warning',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await deletePlayer(playerId);
+      loadPlayers();
+    } catch (err) {
+      setError(err.message || 'Failed to delete player');
+      console.error('Error deleting player:', err);
     }
   };
 
@@ -98,24 +105,24 @@ const PlayersPage = () => {
   const intermediatePlayers = players.filter((p) => p.expertise_level === 'Intermediate' && isMenPlayer(p));
   const womenPlayers = players.filter((p) => p.category === 'Women');
 
-  const leagueCounts = {
+  const divisionCounts = {
     Expert: expertPlayers.length,
     Intermediate: intermediatePlayers.length,
     Women: womenPlayers.length,
   };
 
-  const playersByLeague = {
+  const playersByDivision = {
     Expert: expertPlayers,
     Intermediate: intermediatePlayers,
     Women: womenPlayers,
   };
 
-  const activePlayers = playersByLeague[selectedLeague] || [];
+  const activePlayers = playersByDivision[selectedDivision] || [];
 
-  const leagueEmptyMessages = {
-    Expert: 'No Expert players yet. Add players and select Expert League (Men).',
-    Intermediate: 'No Intermediate players yet. Add players and select Intermediate League (Men).',
-    Women: 'No Women League players yet. Add players and select Women League.',
+  const divisionEmptyMessages = {
+    Expert: 'No Expert players yet. Add players and select Expert Division (Men).',
+    Intermediate: 'No Intermediate players yet. Add players and select Intermediate Division (Men).',
+    Women: 'No Women Division players yet. Add players and select Women Division.',
   };
 
   return (
@@ -143,23 +150,23 @@ const PlayersPage = () => {
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <div className="text-sm text-gray-600">Expert (Men)</div>
-          <div className="text-2xl font-bold text-purple-600">{leagueCounts.Expert}</div>
+          <div className="text-2xl font-bold text-purple-600">{divisionCounts.Expert}</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <div className="text-sm text-gray-600">Intermediate (Men)</div>
-          <div className="text-2xl font-bold text-blue-600">{leagueCounts.Intermediate}</div>
+          <div className="text-2xl font-bold text-blue-600">{divisionCounts.Intermediate}</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Women League</div>
-          <div className="text-2xl font-bold text-pink-600">{leagueCounts.Women}</div>
+          <div className="text-sm text-gray-600">Women Division</div>
+          <div className="text-2xl font-bold text-pink-600">{divisionCounts.Women}</div>
         </div>
       </div>
 
       {players.length > 0 && (
-        <LeagueTabs
-          selected={selectedLeague}
-          onChange={setSelectedLeague}
-          counts={leagueCounts}
+        <DivisionTabs
+          selected={selectedDivision}
+          onChange={setSelectedDivision}
+          counts={divisionCounts}
         />
       )}
 
@@ -207,7 +214,7 @@ const PlayersPage = () => {
       {!loading && players.length > 0 && activePlayers.length === 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <p className="text-gray-600 text-lg mb-2">
-            {leagueEmptyMessages[selectedLeague]}
+            {divisionEmptyMessages[selectedDivision]}
           </p>
           {isAdmin && (
             <Button onClick={handleAddNew} variant="primary" className="mt-4">

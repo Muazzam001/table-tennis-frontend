@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Button from '../components/atoms/Button';
-import Input from '../components/atoms/Input';
-import { login } from '../services/authService';
-import { useAuth } from '../contexts/AuthContext';
+import Button from '@/components/atoms/Button';
+import Input from '@/components/atoms/Input';
+import { login } from '@/services/authService';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');

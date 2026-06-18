@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../contexts/AuthContext';
-import Button from '../../atoms/Button';
+import { useAuth } from '@/contexts/AuthContext';
+import Button from '@/components/atoms/Button';
 
 const Navigation = () => {
   const location = useLocation();
@@ -13,6 +13,7 @@ const Navigation = () => {
     { path: '/teams', label: 'Teams', icon: '🤝' },
     { path: '/matches', label: 'Matches', icon: '⚔️' },
     { path: '/tournament', label: 'Tournament', icon: '🏆' },
+    { path: '/history', label: 'History', icon: '📜' },
   ];
   
   const isActive = (path) => {
@@ -29,7 +30,7 @@ const Navigation = () => {
   
   return (
     <nav className="bg-white shadow-md border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-11/12 mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-2">
             <span className="text-2xl">🏓</span>

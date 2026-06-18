@@ -1,19 +1,19 @@
 export const PLAYER_DIVISIONS = [
   {
     value: 'expert',
-    label: 'Expert League (Men)',
+    label: 'Expert Division (Men)',
     expertise_level: 'Expert',
     category: 'Men',
   },
   {
     value: 'intermediate',
-    label: 'Intermediate League (Men)',
+    label: 'Intermediate Division (Men)',
     expertise_level: 'Intermediate',
     category: 'Men',
   },
   {
     value: 'women',
-    label: 'Women League',
+    label: 'Women Division',
     expertise_level: 'Expert',
     category: 'Women',
   },
@@ -51,7 +51,7 @@ export function playerToDivision(player) {
  */
 export function getPlayerDivisionLabel(player) {
   if (player?.category === 'Women') {
-    return 'Women League';
+    return 'Women Division';
   }
   if (player?.expertise_level === 'Intermediate') {
     return 'Intermediate';

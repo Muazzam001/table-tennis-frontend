@@ -1,23 +1,25 @@
-import Badge from '../../atoms/Badge';
+import Badge from '@/components/atoms/Badge';
 import TeamNameEditor from '../TeamNameEditor/TeamNameEditor';
-import { getLeagueLabel, resolveTeamLeague } from '../../../utils/teamNaming';
+import { getDivisionLabel, resolveTeamDivision } from '@/utils/teamNaming';
 
-const TeamCardPreview = ({ team, onNameChange, index }) => {
-  const league = resolveTeamLeague(team);
+const TeamCardPreview = ({ team, onNameChange, index, isSingles = false }) => {
+  const division = resolveTeamDivision(team);
   const teamNumber = index + 1;
 
-  const leagueBadge = (() => {
-    const label = getLeagueLabel(league);
-    if (league === 'Expert') return <Badge variant="expert">{label}</Badge>;
-    if (league === 'Intermediate') return <Badge variant="intermediate">{label}</Badge>;
-    if (league === 'Women') return <Badge variant="secondary">{label}</Badge>;
+  const divisionBadge = (() => {
+    const label = getDivisionLabel(division);
+    if (division === 'Expert') return <Badge variant="expert">{label}</Badge>;
+    if (division === 'Intermediate') return <Badge variant="intermediate">{label}</Badge>;
+    if (division === 'Women') return <Badge variant="secondary">{label}</Badge>;
     return <Badge variant="primary">{label}</Badge>;
   })();
 
-  const players = [
-    { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
-    { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
-  ];
+  const players = isSingles || team.player2_id == null
+    ? [{ name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise }]
+    : [
+        { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
+        { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
+      ];
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 border-2 border-dashed border-blue-300 hover:border-blue-400 transition-colors">
@@ -31,7 +33,7 @@ const TeamCardPreview = ({ team, onNameChange, index }) => {
               onChange={(name) => onNameChange(index, name)}
             />
           </div>
-          {leagueBadge}
+          {divisionBadge}
         </div>
 
         <div className="space-y-3">

@@ -36,7 +36,7 @@ api.interceptors.response.use(
     // Handle network errors (backend not running)
     if (!error.response) {
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-        return Promise.reject(new Error('Backend server is not running. Please start the backend server on port 3001.'));
+        return Promise.reject(new Error('Backend server is not running. Please start the backend server on port 3000.'));
       }
     }
     

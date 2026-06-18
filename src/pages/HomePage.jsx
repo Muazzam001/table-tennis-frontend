@@ -1,13 +1,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import Card from '../components/atoms/Card';
-import Button from '../components/atoms/Button';
-import { useAuth } from '../contexts/AuthContext';
-import { getDashboardStats } from '../services/statisticsService';
-import { seedPlayers } from '../services/seedService';
-import { resetApplicationData } from '../services/adminService';
-import { getLeagueGroups } from '../services/tournamentService';
-import GroupAssignmentsTable from '../components/molecules/GroupAssignmentsTable';
+import Card from '@/components/atoms/Card';
+import Button from '@/components/atoms/Button';
+import { useAuth } from '@/contexts/AuthContext';
+import { getDashboardStats } from '@/services/statisticsService';
+import { seedPlayers } from '@/services/seedService';
+import { resetApplicationData } from '@/services/adminService';
+import { getDivisionGroups, getTournamentOverview } from '@/services/tournamentService';
+import { archiveTournament } from '@/services/tournamentArchiveService';
+import GroupAssignmentsTable from '@/components/molecules/GroupAssignmentsTable';
+import DivisionWorkflowCards from '@/components/molecules/DivisionWorkflowCards/DivisionWorkflowCards';
+import { getTeams } from '@/services/teamService';
+import { DIVISIONS } from '@/constants/divisions';
+import { showConfirm, showError, showSuccess } from '@/utils/sweetAlert';
 
 const HomePage = () => {
   const location = useLocation();
@@ -27,7 +32,11 @@ const HomePage = () => {
   const [dataSeeded, setDataSeeded] = useState(false);
   const [seedingSteps, setSeedingSteps] = useState([]);
   const [resetting, setResetting] = useState(false);
-  const [leagueGroupsByLeague, setLeagueGroupsByLeague] = useState({});
+  const [divisionGroupsByDivision, setDivisionGroupsByDivision] = useState({});
+  const [divisionOverviews, setDivisionOverviews] = useState({});
+  const [divisionTeamCounts, setDivisionTeamCounts] = useState({});
+  const [divisionWorkflowLoading, setDivisionWorkflowLoading] = useState(false);
+  const [archivingDivision, setArchivingDivision] = useState(null);
 
   // Memoize loadStats to avoid dependency issues
   const loadStats = useCallback(async (forceReload = false) => {
@@ -76,20 +85,54 @@ const HomePage = () => {
       console.log('✅ Stats updated successfully');
 
       if ((newStats.totalTeams || 0) > 0 && (newStats.totalMatches || 0) > 0) {
-        const leagues = ['Expert', 'Intermediate', 'Women'];
+        const divisions = DIVISIONS.map((d) => d.value);
         const groupResults = await Promise.all(
-          leagues.map(async (league) => {
+          divisions.map(async (division) => {
             try {
-              const data = await getLeagueGroups(league);
-              return [league, data?.groups || []];
+              const data = await getDivisionGroups(division);
+              return [division, data?.groups || []];
             } catch {
-              return [league, []];
+              return [division, []];
             }
           })
         );
-        setLeagueGroupsByLeague(Object.fromEntries(groupResults));
+        setDivisionGroupsByDivision(Object.fromEntries(groupResults));
       } else {
-        setLeagueGroupsByLeague({});
+        setDivisionGroupsByDivision({});
+      }
+
+      if ((newStats.totalPlayers || 0) > 0) {
+        setDivisionWorkflowLoading(true);
+        try {
+          const allTeams = await getTeams();
+          const counts = Object.fromEntries(
+            DIVISIONS.map((d) => [
+              d.value,
+              allTeams.filter((t) => (t.division || 'Expert') === d.value).length,
+            ])
+          );
+          setDivisionTeamCounts(counts);
+
+          const overviewResults = await Promise.all(
+            DIVISIONS.map(async (division) => {
+              try {
+                const data = await getTournamentOverview(division.value);
+                return [division.value, data];
+              } catch {
+                return [division.value, null];
+              }
+            })
+          );
+          setDivisionOverviews(Object.fromEntries(overviewResults));
+        } catch {
+          setDivisionTeamCounts({});
+          setDivisionOverviews({});
+        } finally {
+          setDivisionWorkflowLoading(false);
+        }
+      } else {
+        setDivisionTeamCounts({});
+        setDivisionOverviews({});
       }
     } catch (err) {
       console.error('❌ Error loading dashboard stats:', err);
@@ -150,9 +193,15 @@ const HomePage = () => {
   };
 
   const handleResetData = async () => {
-    if (!window.confirm(
-      'This will delete ALL players, teams, matches, and statistics. Admin user accounts will be preserved. Continue?'
-    )) {
+    const confirmed = await showConfirm({
+      title: 'Reset all application data?',
+      text:
+        'This will delete ALL players, teams, matches, and statistics. Admin user accounts will be preserved. Continue?',
+      confirmText: 'Reset everything',
+      icon: 'warning',
+      variant: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -173,7 +222,10 @@ const HomePage = () => {
         );
         detail += `\n\n${lines.join('\n')}`;
       }
-      alert(`Application data reset successfully.\n\n${detail}\n\nYou can reseed demo data when ready.`);
+      await showSuccess(
+        'Application data reset',
+        `${detail}\n\nYou can reseed demo data when ready.`
+      );
     } catch (err) {
       setError(err.message || 'Failed to reset application data');
     } finally {
@@ -191,7 +243,13 @@ const HomePage = () => {
       '3. Create match schedules on the Matches page\n\n' +
       'Continue?';
 
-    if (!window.confirm(confirmMessage)) {
+    const confirmed = await showConfirm({
+      title: 'Seed demo players?',
+      text: confirmMessage,
+      confirmText: 'Seed players',
+      icon: 'question',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -214,12 +272,12 @@ const HomePage = () => {
       if (result?.data?.playersCreated > 0) {
         messageParts.push(`Players created: ${result.data.playersCreated}`);
       }
-      if (result?.data?.leagueCounts) {
-        const { expertMen, intermediateMen, women, total } = result.data.leagueCounts;
+      if (result?.data?.divisionCounts) {
+        const { expertMen, intermediateMen, women, total } = result.data.divisionCounts;
         messageParts.push(`Total players: ${total} (Expert Men: ${expertMen}, Intermediate Men: ${intermediateMen}, Women: ${women})`);
       }
       if (result?.data?.possibleTeams?.Expert) {
-        messageParts.push(`Expert league can form up to ${result.data.possibleTeams.Expert} teams after pairing`);
+        messageParts.push(`Expert division can form up to ${result.data.possibleTeams.Expert} teams after pairing`);
       }
       
       setDataSeeded(true);
@@ -229,7 +287,10 @@ const HomePage = () => {
       setSeedingSteps([]);
       
       const workflow = result?.data?.workflow?.map((step, i) => `${i + 1}. ${step}`).join('\n') || '';
-      alert(`Player seeding completed!\n\n${result?.message || 'Success'}\n\n${messageParts.join('\n')}\n\n${workflow}`);
+      await showSuccess(
+        'Player seeding completed',
+        `${result?.message || 'Success'}\n\n${messageParts.join('\n')}\n\n${workflow}`
+      );
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to setup and seed data';
       setError(errorMessage);
@@ -270,9 +331,40 @@ const HomePage = () => {
         ];
       }
       
-      alert(`Error: ${errorMessage}\n\nTroubleshooting:\n${troubleshootingSteps.join('\n')}`);
+      await showError(
+        'Seeding failed',
+        `Error: ${errorMessage}\n\nTroubleshooting:\n${troubleshootingSteps.join('\n')}`
+      );
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const handleArchiveDivision = async (division) => {
+    const confirmed = await showConfirm({
+      title: `Archive ${division} tournament?`,
+      text:
+        `Archive the completed ${division} tournament?\n\nThis saves all teams, matches, standings, and final results to history, then clears this division so a new season can begin. Players are kept.`,
+      confirmText: 'Archive',
+      icon: 'warning',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setArchivingDivision(division);
+      setError(null);
+      await archiveTournament(division);
+      await loadStats(true);
+      await showSuccess(
+        'Tournament archived',
+        `${division} tournament archived successfully. View it in Tournament History, then create new teams and schedule for the next season.`
+      );
+    } catch (err) {
+      setError(err.message || 'Failed to archive tournament');
+    } finally {
+      setArchivingDivision(null);
     }
   };
 
@@ -336,7 +428,7 @@ const HomePage = () => {
                   <ol className="list-decimal list-inside space-y-1 ml-2">
                     <li>Open a terminal in the project root</li>
                     <li>Run: <code className="bg-yellow-100 px-1 rounded">cd backend && npm start</code></li>
-                    <li>Wait for "Server running on port 3001" message</li>
+                    <li>Wait for "Server running on port 3000" message</li>
                     <li>Refresh this page</li>
                   </ol>
                 </div>
@@ -348,7 +440,7 @@ const HomePage = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Link to="/players" className="block cursor-pointer">
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
+          <Card className="p-5 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">👥</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Players</h3>
             {loading ? (
@@ -363,7 +455,7 @@ const HomePage = () => {
         </Link>
         
         <Link to="/teams" className="block cursor-pointer">
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
+          <Card className="p-5 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">🤝</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Teams</h3>
             {loading ? (
@@ -382,7 +474,7 @@ const HomePage = () => {
         </Link>
         
         <Link to="/matches" className="block cursor-pointer">
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
+          <Card className="p-5 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">⚔️</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Matches</h3>
             {loading ? (
@@ -399,7 +491,7 @@ const HomePage = () => {
         </Link>
         
         <Link to="/tournament" className="block cursor-pointer">
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
+          <Card className="p-5 text-center hover:shadow-lg transition-shadow cursor-pointer h-full">
             <div className="text-4xl mb-3">🏆</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Tournament</h3>
             {loading ? (
@@ -416,24 +508,35 @@ const HomePage = () => {
         </Link>
       </div>
 
-      {!loading && stats.totalTeams > 0 && Object.values(leagueGroupsByLeague).some((g) => g.length > 0) && (
+      {!loading && stats.totalPlayers > 0 && (
+        <DivisionWorkflowCards
+          overviews={divisionOverviews}
+          teamCounts={divisionTeamCounts}
+          loading={divisionWorkflowLoading}
+          isAdmin={isAdmin}
+          archivingDivision={archivingDivision}
+          onArchive={handleArchiveDivision}
+        />
+      )}
+
+      {!loading && stats.totalTeams > 0 && Object.values(divisionGroupsByDivision).some((g) => g.length > 0) && (
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Tournament groups</h2>
             <p className="text-gray-600 mt-1">
-              Team placements per league after the group-stage schedule has been generated.
+              Team placements per division after the group-stage schedule has been generated.
             </p>
           </div>
-          {['Expert', 'Intermediate', 'Women']
-            .filter((league) => (leagueGroupsByLeague[league] || []).length > 0)
-            .map((league) => (
+          {DIVISIONS.filter((division) => (divisionGroupsByDivision[division.value] || []).length > 0).map(
+            (division) => (
               <GroupAssignmentsTable
-                key={league}
-                groups={leagueGroupsByLeague[league]}
-                league={league}
+                key={division.value}
+                groups={divisionGroupsByDivision[division.value]}
+                division={division.value}
                 compact
               />
-            ))}
+            )
+          )}
         </div>
       )}
     </div>

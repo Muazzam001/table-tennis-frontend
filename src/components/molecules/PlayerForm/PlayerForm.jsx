@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import Input from '../../atoms/Input';
-import Select from '../../atoms/Select';
-import Button from '../../atoms/Button';
-import Card from '../../atoms/Card';
+import Input from '@/components/atoms/Input';
+import Select from '@/components/atoms/Select';
+import Button from '@/components/atoms/Button';
+import Card from '@/components/atoms/Card';
 import {
   PLAYER_DIVISIONS,
   divisionToPlayerFields,
   playerToDivision,
-} from '../../../utils/playerDivision';
+} from '@/utils/playerDivision';
 
 const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -50,14 +50,12 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
       newErrors.name = 'Name is required';
     }
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
 
     if (!formData.division) {
-      newErrors.division = 'League is required';
+      newErrors.division = 'Division is required';
     }
 
     setErrors(newErrors);
@@ -74,7 +72,7 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
     const { expertise_level, category } = divisionToPlayerFields(formData.division);
     onSubmit({
       name: formData.name.trim(),
-      email: formData.email.trim(),
+      email: formData.email.trim() || null,
       expertise_level,
       category,
     });
@@ -99,24 +97,23 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
         />
 
         <Input
-          label="Email Address"
+          label="Email Address (optional)"
           name="email"
           type="email"
           value={formData.email}
           onChange={handleChange}
           placeholder="player@company.com"
           error={errors.email}
-          required
         />
 
         <Select
-          label="League"
+          label="Division"
           name="division"
           value={formData.division}
           onChange={handleChange}
           options={PLAYER_DIVISIONS.map((d) => ({ value: d.value, label: d.label }))}
           error={errors.division}
-          placeholder="Select league"
+          placeholder="Select division"
           required
         />
 

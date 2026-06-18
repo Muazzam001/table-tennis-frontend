@@ -1,6 +1,6 @@
-import Badge from '../../atoms/Badge';
-import Button from '../../atoms/Button';
-import { getPlayerDivisionLabel } from '../../../utils/playerDivision';
+import Badge from '@/components/atoms/Badge';
+import Button from '@/components/atoms/Button';
+import { getPlayerDivisionLabel } from '@/utils/playerDivision';
 
 const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
   const isWomen = player.category === 'Women';
