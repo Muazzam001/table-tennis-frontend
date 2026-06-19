@@ -1,11 +1,11 @@
 import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
 import { getPlayerDivisionLabel } from '@/utils/playerDivision';
+import { getExpertiseBadgeVariant } from '@/utils/divisionBadge';
 
 const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
-  const isWomen = player.category === 'Women';
   const divisionLabel = getPlayerDivisionLabel(player);
-  const badgeVariant = isWomen ? 'secondary' : player.expertise_level === 'Expert' ? 'expert' : 'intermediate';
+  const badgeVariant = getExpertiseBadgeVariant(player.expertise_level);
 
   return (
     <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200 hover:shadow-lg transition-shadow">

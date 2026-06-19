@@ -12,7 +12,7 @@ import {
   createPairingRule,
   deletePairingRule,
 } from '@/services/teamPairingRuleService';
-import { DIVISIONS } from '@/constants/divisions';
+import { DIVISIONS, DEFAULT_TOURNAMENT_DIVISION, buildDivisionMap, filterPlayersForDivision } from '@/constants/divisions';
 import { showConfirm } from '@/utils/sweetAlert';
 
 const RULE_TYPE_OPTIONS = [
@@ -21,25 +21,12 @@ const RULE_TYPE_OPTIONS = [
   { value: 'prefer_pair', label: 'Prefer pair' },
 ];
 
-const DEFAULT_FORMATS = { Expert: 'doubles', Intermediate: 'doubles', Women: 'doubles' };
+const DEFAULT_FORMATS = buildDivisionMap('doubles');
 
-const getPlayersForDivision = (players, division) => {
-  if (division === 'Expert') {
-    return players.filter(
-      (p) => p.expertise_level === 'Expert' && (p.category === 'Men' || !p.category)
-    );
-  }
-  if (division === 'Intermediate') {
-    return players.filter(
-      (p) =>
-        p.expertise_level === 'Intermediate' && (p.category === 'Men' || !p.category)
-    );
-  }
-  return players.filter((p) => p.category === 'Women');
-};
+const getPlayersForDivision = (players, division) => filterPlayersForDivision(players, division);
 
 const TeamPairingRulesPage = () => {
-  const [selectedDivision, setSelectedDivision] = useState('Expert');
+  const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
   const [divisionFormats, setDivisionFormats] = useState({ ...DEFAULT_FORMATS });
   const [players, setPlayers] = useState([]);
   const [dbRules, setDbRules] = useState([]);
@@ -217,11 +204,9 @@ const TeamPairingRulesPage = () => {
       <DivisionTabs
         selected={selectedDivision}
         onChange={setSelectedDivision}
-        counts={{
-          Expert: divisionFormats.Expert === 'doubles' ? 1 : 0,
-          Intermediate: divisionFormats.Intermediate === 'doubles' ? 1 : 0,
-          Women: divisionFormats.Women === 'doubles' ? 1 : 0,
-        }}
+        counts={Object.fromEntries(
+          DIVISIONS.map((d) => [d.value, divisionFormats[d.value] === 'doubles' ? 1 : 0])
+        )}
       />
 
       <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-4">

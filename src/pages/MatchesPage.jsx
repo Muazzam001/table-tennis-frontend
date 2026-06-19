@@ -25,7 +25,7 @@ import {
 import { getTimeSlotConfig, getTimeSlotSummary, saveTimeSlotConfig } from '@/config/timeSlotConfig';
 import { getCourtConfig, getCourtSummary, saveCourtConfig } from '@/config/courtConfig';
 import { showSuccess } from '@/utils/sweetAlert';
-import { DIVISIONS } from '@/constants/divisions';
+import { DIVISIONS, DEFAULT_TOURNAMENT_DIVISION } from '@/constants/divisions';
 
 const getDivision = (item) => item?.division ?? null;
 
@@ -42,7 +42,7 @@ const MatchesPage = () => {
   const [generatingQF, setGeneratingQF] = useState(false);
   const [generatingSF, setGeneratingSF] = useState(false);
   const [generatingFinal, setGeneratingFinal] = useState(false);
-  const [selectedDivision, setSelectedDivision] = useState('Expert');
+  const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupOptions, setSetupOptions] = useState(null);
   const [selectedGroupCount, setSelectedGroupCount] = useState(null);
@@ -506,11 +506,9 @@ const MatchesPage = () => {
       <DivisionTabs
         selected={selectedDivision}
         onChange={setSelectedDivision}
-        counts={{
-          Expert: teams.filter((t) => getDivision(t) === 'Expert').length,
-          Intermediate: teams.filter((t) => getDivision(t) === 'Intermediate').length,
-          Women: teams.filter((t) => getDivision(t) === 'Women').length,
-        }}
+        counts={Object.fromEntries(
+          DIVISIONS.map((d) => [d.value, teams.filter((t) => getDivision(t) === d.value).length])
+        )}
       />
 
       {divisionTeams.length === 0 && !loading && (

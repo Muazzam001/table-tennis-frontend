@@ -3,6 +3,7 @@ import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
 import TeamNameEditor from '../TeamNameEditor/TeamNameEditor';
 import { getDivisionLabel, normalizeTeamName, resolveTeamDivision } from '@/utils/teamNaming';
+import { getDivisionBadgeVariant, getExpertiseBadgeVariant } from '@/utils/divisionBadge';
 
 const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSingles = false }) => {
   const division = resolveTeamDivision(team);
@@ -13,10 +14,7 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSing
 
   const divisionBadge = (() => {
     const label = getDivisionLabel(division);
-    if (division === 'Expert') return <Badge variant="expert">{label}</Badge>;
-    if (division === 'Intermediate') return <Badge variant="intermediate">{label}</Badge>;
-    if (division === 'Women') return <Badge variant="secondary">{label}</Badge>;
-    return <Badge variant="primary">{label}</Badge>;
+    return <Badge variant={getDivisionBadgeVariant(division)}>{label}</Badge>;
   })();
 
   const players = isSingles || team.player2_id == null
@@ -85,7 +83,7 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSing
                 <p className="font-medium text-gray-900">{p.name}</p>
                 {/* <p className="text-xs text-gray-600">Player ID: {p.id}</p> */}
               </div>
-              <Badge variant={p.expertise === 'Expert' ? 'expert' : 'intermediate'}>
+              <Badge variant={getExpertiseBadgeVariant(p.expertise)}>
                 {p.expertise}
               </Badge>
             </div>

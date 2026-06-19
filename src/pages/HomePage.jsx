@@ -11,7 +11,7 @@ import { archiveTournament } from '@/services/tournamentArchiveService';
 import GroupAssignmentsTable from '@/components/molecules/GroupAssignmentsTable';
 import DivisionWorkflowCards from '@/components/molecules/DivisionWorkflowCards/DivisionWorkflowCards';
 import { getTeams } from '@/services/teamService';
-import { DIVISIONS } from '@/constants/divisions';
+import { DIVISIONS, DEFAULT_TOURNAMENT_DIVISION } from '@/constants/divisions';
 import { showConfirm, showError, showSuccess } from '@/utils/sweetAlert';
 
 const HomePage = () => {
@@ -108,7 +108,7 @@ const HomePage = () => {
           const counts = Object.fromEntries(
             DIVISIONS.map((d) => [
               d.value,
-              allTeams.filter((t) => (t.division || 'Expert') === d.value).length,
+              allTeams.filter((t) => (t.division || DEFAULT_TOURNAMENT_DIVISION) === d.value).length,
             ])
           );
           setDivisionTeamCounts(counts);
@@ -184,10 +184,11 @@ const HomePage = () => {
 
 
   const getExpertiseText = () => {
+    const beginner = stats.expertiseLevels?.Beginner || 0;
     const intermediate = stats.expertiseLevels?.Intermediate || 0;
     const expert = stats.expertiseLevels?.Expert || 0;
-    if (intermediate > 0 || expert > 0) {
-      return `${intermediate} Intermediate, ${expert} Expert`;
+    if (beginner > 0 || intermediate > 0 || expert > 0) {
+      return `${beginner} Beginner, ${intermediate} Intermediate, ${expert} Expert`;
     }
     return 'No players yet';
   };
@@ -273,11 +274,18 @@ const HomePage = () => {
         messageParts.push(`Players created: ${result.data.playersCreated}`);
       }
       if (result?.data?.divisionCounts) {
-        const { expertMen, intermediateMen, women, total } = result.data.divisionCounts;
-        messageParts.push(`Total players: ${total} (Expert Men: ${expertMen}, Intermediate Men: ${intermediateMen}, Women: ${women})`);
+        const counts = result.data.divisionCounts;
+        const total = Object.values(counts).reduce((sum, n) => sum + (Number(n) || 0), 0);
+        const summary = Object.entries(counts)
+          .filter(([, n]) => n > 0)
+          .map(([track, n]) => `${track}: ${n}`)
+          .join(', ');
+        messageParts.push(`Total players: ${total}${summary ? ` (${summary})` : ''}`);
       }
-      if (result?.data?.possibleTeams?.Expert) {
-        messageParts.push(`Expert division can form up to ${result.data.possibleTeams.Expert} teams after pairing`);
+      if (result?.data?.possibleTeams?.Men) {
+        messageParts.push(
+          `Men division can form up to ${result.data.possibleTeams.Men} teams after pairing`
+        );
       }
       
       setDataSeeded(true);

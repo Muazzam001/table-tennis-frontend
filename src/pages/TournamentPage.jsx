@@ -8,10 +8,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getTournamentOverview } from '@/services/tournamentService';
 import { archiveTournament } from '@/services/tournamentArchiveService';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
+import { DEFAULT_TOURNAMENT_DIVISION } from '@/constants/divisions';
 
 const TournamentPage = () => {
   const { isAdmin } = useAuth();
-  const [selectedDivision, setSelectedDivision] = useState('Expert');
+  const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

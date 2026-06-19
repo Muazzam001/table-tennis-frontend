@@ -13,17 +13,14 @@ import { getDivisionGroups } from '@/services/tournamentService';
 import { getDivisionSettings, updateDivisionFormat } from '@/services/divisionService';
 import { getEffectivePairingRules } from '@/services/teamPairingRuleService';
 import { buildDoublesTeamsWithPairingRules } from '@shared/tournament/teamPairing.js';
-import { DIVISIONS, getCompetitionFormatLabel } from '@/constants/divisions';
+import { DIVISIONS, DEFAULT_TOURNAMENT_DIVISION, getCompetitionFormatLabel, buildDivisionMap, countPlayersByDivision, filterPlayersForDivision } from '@/constants/divisions';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
 
-const EMPTY_PREVIEW = { Expert: [], Intermediate: [], Women: [] };
-const DEFAULT_FORMATS = { Expert: 'doubles', Intermediate: 'doubles', Women: 'doubles' };
+const EMPTY_PREVIEW = buildDivisionMap([]);
+const DEFAULT_FORMATS = buildDivisionMap('doubles');
 
-const getDivisionPlayerCount = (playerStats, division) => {
-  if (division === 'Expert') return playerStats.expertMen;
-  if (division === 'Intermediate') return playerStats.intermediateMen;
-  return playerStats.women;
-};
+const getDivisionPlayerCount = (playerStats, division) =>
+  playerStats.countsByDivision?.[division] ?? 0;
 
 const canGenerateForDivision = (playerStats, division, competitionFormat = 'doubles') => {
   const count = getDivisionPlayerCount(playerStats, division);
@@ -35,20 +32,7 @@ const getFormatRequirementText = (competitionFormat) =>
     ? 'each player competes individually (even count, ≥ 2)'
     : 'players are paired into 2-player teams (even count, ≥ 2)';
 
-const getPlayersForDivision = (players, division) => {
-  if (division === 'Expert') {
-    return players.filter(
-      (p) => p.expertise_level === 'Expert' && (p.category === 'Men' || !p.category)
-    );
-  }
-  if (division === 'Intermediate') {
-    return players.filter(
-      (p) =>
-        p.expertise_level === 'Intermediate' && (p.category === 'Men' || !p.category)
-    );
-  }
-  return players.filter((p) => p.category === 'Women');
-};
+const getPlayersForDivision = (players, division) => filterPlayersForDivision(players, division);
 
 const TeamsPage = () => {
   const { isAdmin } = useAuth();
@@ -60,7 +44,7 @@ const TeamsPage = () => {
   // State for preview teams per division (not saved yet)
   const [previewTeamsByDivision, setPreviewTeamsByDivision] = useState({ ...EMPTY_PREVIEW });
   const [saving, setSaving] = useState(false);
-  const [selectedDivision, setSelectedDivision] = useState('Expert');
+  const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
   const [divisionFormats, setDivisionFormats] = useState({ ...DEFAULT_FORMATS });
   const [formatSaving, setFormatSaving] = useState(false);
   const [divisionGroups, setDivisionGroups] = useState([]);
@@ -69,10 +53,8 @@ const TeamsPage = () => {
   // State for player counts (to show requirements)
   const [playerStats, setPlayerStats] = useState({
     total: 0,
-    expertMen: 0,
-    intermediateMen: 0,
-    women: 0,
-    players: [] // Store full player list for generation
+    countsByDivision: buildDivisionMap(0),
+    players: [],
   });
 
   // Load teams and player stats when component mounts
@@ -130,16 +112,12 @@ const TeamsPage = () => {
   const loadPlayerStats = async () => {
     try {
       const players = await getPlayers();
-      const expertMen = players.filter(p => p.expertise_level === 'Expert' && (p.category === 'Men' || !p.category)).length;
-      const intermediateMen = players.filter(p => p.expertise_level === 'Intermediate' && (p.category === 'Men' || !p.category)).length;
-      const women = players.filter(p => p.category === 'Women').length;
+      const countsByDivision = countPlayersByDivision(players);
 
       setPlayerStats({
         total: players.length,
-        expertMen,
-        intermediateMen,
-        women,
-        players // Store players for team generation
+        countsByDivision,
+        players,
       });
     } catch (err) {
       console.error('Error loading player stats:', err);
@@ -386,11 +364,9 @@ const TeamsPage = () => {
   const activePreviewTeams = previewTeamsByDivision[selectedDivision] || [];
   const hasPreviewForSelected = activePreviewTeams.length > 0;
 
-  const divisionTeamCounts = {
-    Expert: teamsByDivision('Expert').length,
-    Intermediate: teamsByDivision('Intermediate').length,
-    Women: teamsByDivision('Women').length,
-  };
+  const divisionTeamCounts = Object.fromEntries(
+    DIVISIONS.map((d) => [d.value, teamsByDivision(d.value).length])
+  );
 
   const activeTeams = teamsByDivision(selectedDivision);
 
@@ -425,15 +401,16 @@ const TeamsPage = () => {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-semibold text-blue-900 mb-2">Generation Requirements</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li className={(playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
-            Expert Division (Men): {playerStats.expertMen} players — {divisionFormats.Expert === 'singles' ? 'singles' : 'doubles'} ({getFormatRequirementText(divisionFormats.Expert)})
-          </li>
-          <li className={(playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
-            Intermediate Division (Men): {playerStats.intermediateMen} players — {divisionFormats.Intermediate === 'singles' ? 'singles' : 'doubles'} ({getFormatRequirementText(divisionFormats.Intermediate)})
-          </li>
-          <li className={(playerStats.women >= 2 && playerStats.women % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
-            Women Division: {playerStats.women} players — {divisionFormats.Women === 'singles' ? 'singles' : 'doubles'} ({getFormatRequirementText(divisionFormats.Women)})
-          </li>
+          {DIVISIONS.map((division) => {
+            const count = getDivisionPlayerCount(playerStats, division.value);
+            const format = divisionFormats[division.value] || 'doubles';
+            const ok = count >= 2 && count % 2 === 0;
+            return (
+              <li key={division.value} className={ok ? 'text-green-700' : 'text-red-700'}>
+                {division.label}: {count} players — {format === 'singles' ? 'singles' : 'doubles'} ({getFormatRequirementText(format)})
+              </li>
+            );
+          })}
           <li className="text-blue-700">
             Each division can be singles or doubles — choose the format before generating {entrantLabel}.
             {!isSinglesDivision && ' Doubles generation uses pairing rules when configured.'}
@@ -442,22 +419,14 @@ const TeamsPage = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <div className="text-sm text-gray-600">Total Teams</div>
           <div className="text-2xl font-bold text-gray-900">{teams.length}</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Expert Teams</div>
-          <div className="text-2xl font-bold text-purple-600">{divisionTeamCounts.Expert}</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Intermediate Teams</div>
-          <div className="text-2xl font-bold text-blue-600">{divisionTeamCounts.Intermediate}</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Women Teams</div>
-          <div className="text-2xl font-bold text-pink-600">{divisionTeamCounts.Women}</div>
+          <div className="text-sm text-gray-600">{selectedDivisionLabel}</div>
+          <div className="text-2xl font-bold text-purple-600">{divisionTeamCounts[selectedDivision] || 0}</div>
         </div>
       </div>
 

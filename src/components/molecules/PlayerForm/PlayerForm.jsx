@@ -3,17 +3,14 @@ import Input from '@/components/atoms/Input';
 import Select from '@/components/atoms/Select';
 import Button from '@/components/atoms/Button';
 import Card from '@/components/atoms/Card';
-import {
-  PLAYER_DIVISIONS,
-  divisionToPlayerFields,
-  playerToDivision,
-} from '@/utils/playerDivision';
+import { GENDERS, EXPERTISE_LEVELS } from '@/utils/playerDivision';
 
 const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    division: '',
+    category: 'Men',
+    expertise_level: 'Beginner',
   });
 
   const [errors, setErrors] = useState({});
@@ -24,7 +21,10 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
       setFormData({
         name: player.name || '',
         email: player.email || '',
-        division: playerToDivision(player),
+        category: player.category === 'Women' ? 'Women' : 'Men',
+        expertise_level: EXPERTISE_LEVELS.includes(player.expertise_level)
+          ? player.expertise_level
+          : 'Beginner',
       });
     }
   }, [player]);
@@ -54,8 +54,12 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    if (!formData.division) {
-      newErrors.division = 'Division is required';
+    if (!GENDERS.includes(formData.category)) {
+      newErrors.category = 'Gender division is required';
+    }
+
+    if (!EXPERTISE_LEVELS.includes(formData.expertise_level)) {
+      newErrors.expertise_level = 'Expertise level is required';
     }
 
     setErrors(newErrors);
@@ -69,12 +73,11 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
       return;
     }
 
-    const { expertise_level, category } = divisionToPlayerFields(formData.division);
     onSubmit({
       name: formData.name.trim(),
       email: formData.email.trim() || null,
-      expertise_level,
-      category,
+      expertise_level: formData.expertise_level,
+      category: formData.category,
     });
   };
 
@@ -107,13 +110,22 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
         />
 
         <Select
-          label="Division"
-          name="division"
-          value={formData.division}
+          label="Gender Division"
+          name="category"
+          value={formData.category}
           onChange={handleChange}
-          options={PLAYER_DIVISIONS.map((d) => ({ value: d.value, label: d.label }))}
-          error={errors.division}
-          placeholder="Select division"
+          options={GENDERS.map((g) => ({ value: g, label: g }))}
+          error={errors.category}
+          required
+        />
+
+        <Select
+          label="Expertise Level"
+          name="expertise_level"
+          value={formData.expertise_level}
+          onChange={handleChange}
+          options={EXPERTISE_LEVELS.map((level) => ({ value: level, label: level }))}
+          error={errors.expertise_level}
           required
         />
 

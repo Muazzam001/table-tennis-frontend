@@ -5,26 +5,27 @@ import PlayerForm from '@/components/molecules/PlayerForm';
 import DivisionTabs from '@/components/molecules/DivisionTabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPlayers, createPlayer, updatePlayer, deletePlayer } from '@/services/playerService';
+import {
+  DIVISIONS,
+  DEFAULT_TOURNAMENT_DIVISION,
+  countPlayersByDivision,
+  filterPlayersForDivision,
+} from '@/constants/divisions';
 import { showConfirm } from '@/utils/sweetAlert';
 
 const PlayersPage = () => {
   const { isAdmin } = useAuth();
-  // State for managing players list
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // State for form modal
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
-  const [selectedDivision, setSelectedDivision] = useState('Expert');
+  const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
 
-  // Load players when component mounts
   useEffect(() => {
     loadPlayers();
   }, []);
 
-  // Function to fetch all players from API
   const loadPlayers = async () => {
     try {
       setLoading(true);
@@ -39,18 +40,14 @@ const PlayersPage = () => {
     }
   };
 
-  // Handle form submission (both add and edit)
   const handleSubmit = async (formData) => {
     try {
       if (editingPlayer) {
-        // Update existing player
         await updatePlayer(editingPlayer.id, formData);
       } else {
-        // Create new player
         await createPlayer(formData);
       }
 
-      // Close form and reload players
       setShowForm(false);
       setEditingPlayer(null);
       loadPlayers();
@@ -60,13 +57,11 @@ const PlayersPage = () => {
     }
   };
 
-  // Handle edit button click
   const handleEdit = (player) => {
     setEditingPlayer(player);
     setShowForm(true);
   };
 
-  // Handle delete button click
   const handleDelete = async (playerId) => {
     const confirmed = await showConfirm({
       title: 'Delete player?',
@@ -86,48 +81,23 @@ const PlayersPage = () => {
     }
   };
 
-  // Handle cancel button
   const handleCancel = () => {
     setShowForm(false);
     setEditingPlayer(null);
     setError(null);
   };
 
-  // Handle add new player button
   const handleAddNew = () => {
     setEditingPlayer(null);
     setShowForm(true);
   };
 
-  const isMenPlayer = (p) => p.category === 'Men' || !p.category;
-
-  const expertPlayers = players.filter((p) => p.expertise_level === 'Expert' && isMenPlayer(p));
-  const intermediatePlayers = players.filter((p) => p.expertise_level === 'Intermediate' && isMenPlayer(p));
-  const womenPlayers = players.filter((p) => p.category === 'Women');
-
-  const divisionCounts = {
-    Expert: expertPlayers.length,
-    Intermediate: intermediatePlayers.length,
-    Women: womenPlayers.length,
-  };
-
-  const playersByDivision = {
-    Expert: expertPlayers,
-    Intermediate: intermediatePlayers,
-    Women: womenPlayers,
-  };
-
-  const activePlayers = playersByDivision[selectedDivision] || [];
-
-  const divisionEmptyMessages = {
-    Expert: 'No Expert players yet. Add players and select Expert Division (Men).',
-    Intermediate: 'No Intermediate players yet. Add players and select Intermediate Division (Men).',
-    Women: 'No Women Division players yet. Add players and select Women Division.',
-  };
+  const divisionCounts = countPlayersByDivision(players);
+  const activePlayers = filterPlayersForDivision(players, selectedDivision);
+  const selectedDivisionMeta = DIVISIONS.find((d) => d.value === selectedDivision);
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Players</h2>
@@ -142,23 +112,14 @@ const PlayersPage = () => {
         )}
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <div className="text-sm text-gray-600">Total Players</div>
           <div className="text-2xl font-bold text-gray-900">{players.length}</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Expert (Men)</div>
-          <div className="text-2xl font-bold text-purple-600">{divisionCounts.Expert}</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Intermediate (Men)</div>
-          <div className="text-2xl font-bold text-blue-600">{divisionCounts.Intermediate}</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Women Division</div>
-          <div className="text-2xl font-bold text-pink-600">{divisionCounts.Women}</div>
+          <div className="text-sm text-gray-600">{selectedDivisionMeta?.label || selectedDivision}</div>
+          <div className="text-2xl font-bold text-purple-600">{divisionCounts[selectedDivision] || 0}</div>
         </div>
       </div>
 
@@ -170,14 +131,12 @@ const PlayersPage = () => {
         />
       )}
 
-      {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
           <strong>Error</strong>
         </div>
       )}
 
-      {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -192,14 +151,12 @@ const PlayersPage = () => {
         </div>
       )}
 
-      {/* Loading State */}
       {loading && (
         <div className="text-center py-12">
           <div className="text-gray-600">Loading players...</div>
         </div>
       )}
 
-      {/* Empty State - No players at all */}
       {!loading && players.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <p className="text-gray-600 text-lg mb-4">No players found</p>
@@ -214,7 +171,7 @@ const PlayersPage = () => {
       {!loading && players.length > 0 && activePlayers.length === 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <p className="text-gray-600 text-lg mb-2">
-            {divisionEmptyMessages[selectedDivision]}
+            No players in {selectedDivisionMeta?.label || selectedDivision} yet.
           </p>
           {isAdmin && (
             <Button onClick={handleAddNew} variant="primary" className="mt-4">
@@ -237,7 +194,6 @@ const PlayersPage = () => {
           ))}
         </div>
       )}
-
     </div>
   );
 };
