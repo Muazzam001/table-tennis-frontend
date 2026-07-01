@@ -314,34 +314,45 @@ const HomePage = () => {
       // Show helpful error message based on error type
       let troubleshootingSteps = [];
 
-      if (errorMessage.includes('MySQL server is not running')) {
+      if (
+        errorMessage.includes('PostgreSQL') ||
+        errorMessage.includes('Database not configured') ||
+        errorMessage.includes('DATABASE_URL')
+      ) {
         troubleshootingSteps = [
-          '1. Start MySQL service:',
-          '   - Windows: Open Services, find MySQL, and start it',
-          '   - Mac/Linux: Run: sudo service mysql start',
-          '2. Verify MySQL is running: mysql --version',
-          '3. Try seeding again'
+          '1. Check backend/.env has DATABASE_URL or SUPABASE_DB_PASSWORD set',
+          '2. Get credentials from Supabase Dashboard → Project Settings → Database',
+          '3. Run migrations: npm run db:migrate',
+          '4. Restart the backend and try seeding again',
         ];
-      } else if (errorMessage.includes('Access denied')) {
+      } else if (errorMessage.includes('Access denied') || errorMessage.includes('password authentication')) {
         troubleshootingSteps = [
-          '1. Check backend/.env file exists',
-          '2. Verify DB_USER and DB_PASS are correct',
-          '3. Test connection: mysql -u [user] -p',
-          '4. Ensure user has CREATE DATABASE permission'
+          '1. Check backend/.env exists',
+          '2. Verify DATABASE_URL or SUPABASE_DB_PASSWORD is correct',
+          '3. Confirm the Supabase project is active and the database password matches',
         ];
-      } else if (errorMessage.includes('Cannot connect')) {
+      } else if (
+        errorMessage.includes('Cannot connect') ||
+        errorMessage.includes('not reachable') ||
+        errorMessage.includes('Connection timeout')
+      ) {
         troubleshootingSteps = [
-          '1. Check DB_HOST in backend/.env (should be "localhost" or your MySQL host)',
-          '2. Check DB_PORT in backend/.env (default is 3306)',
-          '3. Verify MySQL server is accessible',
-          '4. Check firewall settings'
+          '1. Check DATABASE_URL uses the Supabase pooler host if on IPv4',
+          '2. Set SUPABASE_POOLER_HOST in backend/.env if direct db.*.supabase.co fails',
+          '3. Verify network access to Supabase (firewall/VPN)',
+          '4. Check backend console for detailed connection errors',
+        ];
+      } else if (errorMessage.includes('does not exist') || errorMessage.includes('migrations')) {
+        troubleshootingSteps = [
+          '1. Run Supabase migrations: npm run db:migrate',
+          '2. Confirm tables exist in Supabase Dashboard → Table Editor',
+          '3. Restart the backend and try seeding again',
         ];
       } else {
         troubleshootingSteps = [
-          '1. Verify MySQL server is running',
-          '2. Check database credentials in backend/.env',
-          '3. Ensure user has CREATE DATABASE permissions',
-          '4. Check backend console for detailed error messages'
+          '1. Verify DATABASE_URL or SUPABASE_DB_PASSWORD in backend/.env',
+          '2. Run npm run db:migrate if tables are missing',
+          '3. Check backend console for detailed error messages',
         ];
       }
 
