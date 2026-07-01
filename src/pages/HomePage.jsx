@@ -138,9 +138,13 @@ const HomePage = () => {
       console.error('❌ Error loading dashboard stats:', err);
       // Don't show error if it's just a connection issue - user might not have backend running yet
       const errorMessage = err.message || 'Failed to load statistics';
+      const isLocalDev =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
       if (errorMessage.includes('Backend server is not running')) {
-        // Set a friendly message but don't block the UI
         setError('⚠️ Backend server not detected. Please start the backend server to view statistics.');
+      } else if (errorMessage.includes('Unable to reach the API server')) {
+        setError('⚠️ Production API is unreachable. The backend at table-tennis-backend.vercel.app is not responding.');
       } else {
         setError(errorMessage);
       }
@@ -424,7 +428,7 @@ const HomePage = () => {
       </div>
 
       {error && (
-        <div className={`px-4 py-3 rounded ${error.includes('Backend server not detected')
+        <div className={`px-4 py-3 rounded ${error.includes('Backend server not detected') || error.includes('Production API is unreachable')
             ? 'bg-yellow-50 border border-yellow-200 text-yellow-800'
             : 'bg-red-50 border border-red-200 text-red-700'
           }`}>
@@ -433,13 +437,37 @@ const HomePage = () => {
               <p className="font-medium">{error}</p>
               {error.includes('Backend server not detected') && (
                 <div className="mt-2 text-sm">
-                  <p className="mb-1">To start the backend server:</p>
+                  <p className="mb-1">To start the backend server locally:</p>
                   <ol className="list-decimal list-inside space-y-1 ml-2">
                     <li>Open a terminal in the project root</li>
                     <li>Run: <code className="bg-yellow-100 px-1 rounded">cd backend && npm start</code></li>
                     <li>Wait for "Server running on port 3000" message</li>
                     <li>Refresh this page</li>
                   </ol>
+                </div>
+              )}
+              {error.includes('Production API is unreachable') && (
+                <div className="mt-2 text-sm space-y-2">
+                  <p>In the Vercel dashboard for <strong>table-tennis-backend</strong>, confirm these environment variables are set, then redeploy:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li><code className="bg-yellow-100 px-1 rounded">SUPABASE_DB_PASSWORD</code></li>
+                    <li><code className="bg-yellow-100 px-1 rounded">SUPABASE_PROJECT_REF</code></li>
+                    <li><code className="bg-yellow-100 px-1 rounded">SUPABASE_POOLER_HOST</code></li>
+                    <li><code className="bg-yellow-100 px-1 rounded">JWT_SECRET</code></li>
+                    <li><code className="bg-yellow-100 px-1 rounded">CORS_ORIGIN=https://table-tennis-frontend-one.vercel.app</code></li>
+                  </ul>
+                  <p>
+                    Verify:{' '}
+                    <a
+                      href="https://table-tennis-backend.vercel.app/api/health"
+                      className="underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      table-tennis-backend.vercel.app/api/health
+                    </a>{' '}
+                    should return JSON, not a 500 error.
+                  </p>
                 </div>
               )}
             </div>
