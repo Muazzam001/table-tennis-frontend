@@ -28,8 +28,8 @@ Deploy the React + Vite app (`frontend/`) as a **separate Vercel project** from 
 In **Settings → Environment Variables**:
 
 ```env
-# Production backend API (must include https:// and end with /api)
-VITE_API_BASE_URL=https://table-tennis-backend.vercel.app/api
+# Recommended: same-origin /api (proxied to backend via frontend/vercel.json)
+VITE_API_BASE_URL=/api
 
 # Supabase (optional — for future direct client access)
 VITE_SUPABASE_URL=https://your-project.supabase.co
@@ -38,7 +38,9 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-or-publishable-key
 
 **Important:** `VITE_*` variables are baked in at **build time**. Redeploy the frontend after changing them.
 
-`VITE_API_BASE_URL` **must include `https://`**. A value like `table-tennis-backend.vercel.app/api` (no scheme) is treated as a relative path by the browser and API calls will 404 on the frontend domain.
+`frontend/vercel.json` proxies `/api/*` → `https://table-tennis-backend.vercel.app/api/*`, so the browser calls the same origin and **CORS is not required** for API requests. Local dev uses the Vite proxy in `vite.config.js` for the same `/api` path.
+
+If you set a full backend URL instead of `/api`, it **must include `https://`**.
 
 Also set `CORS_ORIGIN` on the **backend** project to this frontend URL, e.g. `https://your-frontend.vercel.app`.
 
