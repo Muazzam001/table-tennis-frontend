@@ -450,7 +450,7 @@ const HomePage = () => {
               )}
               {error.includes('Cannot reach the API') && (
                 <div className="mt-2 text-sm space-y-2">
-                  <p>1. Redeploy <strong>table-tennis-backend</strong> — build must create <code className="bg-yellow-100 px-1 rounded">api/index.mjs</code></p>
+                  <p>1. Redeploy <strong>table-tennis-backend</strong> — commit <code className="bg-yellow-100 px-1 rounded">api/index.mjs</code> and build must create <code className="bg-yellow-100 px-1 rounded">.vercel/bundle.mjs</code></p>
                   <p>2. Redeploy <strong>table-tennis-frontend-one</strong> with <code className="bg-yellow-100 px-1 rounded">VITE_API_BASE_URL=/api</code></p>
                   <p>
                     3. Verify:{' '}
@@ -469,7 +469,7 @@ const HomePage = () => {
               {error.includes('Backend API returned 404') && (
                 <div className="mt-2 text-sm space-y-2">
                   <p>The backend Vercel project is not serving API routes yet.</p>
-                  <p>In the backend repo: run <code className="bg-yellow-100 px-1 rounded">npm run build</code>, push, and redeploy. Build logs should show <code className="bg-yellow-100 px-1 rounded">api/index.mjs</code>.</p>
+                  <p>In the backend repo: run <code className="bg-yellow-100 px-1 rounded">npm run build</code>, push (including <code className="bg-yellow-100 px-1 rounded">api/index.mjs</code>), and redeploy. Build logs should show <code className="bg-yellow-100 px-1 rounded">.vercel/bundle.mjs</code>.</p>
                 </div>
               )}
             </div>
