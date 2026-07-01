@@ -147,9 +147,11 @@ const TournamentSetupPanel = ({
       )}
 
       {isValid && (
-        <Button onClick={onGenerate} variant="primary" disabled={generating}>
-          {generating ? 'Generating...' : isSingleGroup ? `Generate ${divisionLabel} Schedule (Single Group)` : `Generate ${divisionLabel} Group Stage`}
-        </Button>
+        <div className="flex gap-2 justify-end">
+          <Button onClick={onGenerate} variant="primary" disabled={generating}>
+            {generating ? 'Generating...' : isSingleGroup ? `Generate ${divisionLabel} Schedule (Single Group)` : `Generate ${divisionLabel} Group Stage`}
+          </Button>
+        </div>
       )}
     </div>
   );

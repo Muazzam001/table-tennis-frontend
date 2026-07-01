@@ -3,6 +3,7 @@
  *
  * Standalone frontend repo: src/shared is committed and used directly.
  * If ../shared is present locally, this script refreshes the vendored copy before dev/build.
+ * The tournament/data/ folder is backend-only (seed roster) and is not copied here.
  */
 import fs from 'fs/promises';
 import path from 'path';
@@ -16,7 +17,7 @@ async function copyDir(src, dest) {
   await fs.mkdir(dest, { recursive: true });
 
   for (const entry of await fs.readdir(src, { withFileTypes: true })) {
-    if (entry.name === '__tests__' || entry.name === 'node_modules') {
+    if (entry.name === '__tests__' || entry.name === 'node_modules' || entry.name === 'data') {
       continue;
     }
 

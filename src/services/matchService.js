@@ -175,4 +175,21 @@ export const generateFinal = async (startDate, venue, division, timeSlotConfig =
   }
 };
 
+// Auto-fill match results for testing (admin only)
+export const autoFillMatchResults = async (division, options = {}) => {
+  try {
+    const { roundType, fillAll, setConfig, gamePointsPerSet } = options;
+    const response = await api.post('/matches/auto-fill-results', {
+      division,
+      roundType,
+      fillAll: Boolean(fillAll),
+      setConfig,
+      gamePointsPerSet,
+    });
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
 

@@ -1,20 +1,37 @@
-import { Link } from 'react-router-dom';
-import Card from '@/components/atoms/Card';
 import Button from '@/components/atoms/Button';
+import Card from '@/components/atoms/Card';
 import TournamentStatusBadge from '@/components/atoms/TournamentStatusBadge/TournamentStatusBadge';
 import { DIVISIONS } from '@/constants/divisions';
+import { Link } from 'react-router-dom';
+
+import { isTierPyramidFormat } from '@/constants/tournamentFormats';
 
 const getNextStep = (overview, teamCount) => {
+  const pyramid = isTierPyramidFormat(overview?.format || overview?.tournament_format);
   if (!teamCount || teamCount === 0) {
     return { label: 'Generate teams', href: '/teams' };
   }
+  if (pyramid && overview?.pyramid && !overview.pyramid.tierAssignments?.length) {
+    return { label: 'Assign tiers', href: '/matches' };
+  }
   if (!overview?.matches?.length) {
-    return { label: 'Create group-stage schedule', href: '/matches' };
+    return { label: pyramid ? 'Create Tier Pyramid schedule' : 'Create group-stage schedule', href: '/matches' };
   }
   if (overview?.status !== 'Completed') {
     return { label: 'Manage matches & scores', href: '/matches' };
   }
   return { label: 'View results', href: '/tournament' };
+};
+
+const getGuestBrowseLink = (overview, teamCount) => {
+  const matchCount = overview?.matches?.length || 0;
+  if (matchCount > 0) {
+    return { label: 'View standings & results', href: '/tournament' };
+  }
+  if (teamCount > 0) {
+    return { label: 'View teams', href: '/teams' };
+  }
+  return { label: 'View players', href: '/players' };
 };
 
 const DivisionWorkflowCards = ({
@@ -29,7 +46,9 @@ const DivisionWorkflowCards = ({
     <div>
       <h2 className="text-2xl font-bold text-gray-900">Division tournaments</h2>
       <p className="text-gray-600 mt-1">
-        Each division runs independently — teams, schedules, and knockouts are managed per division.
+        {isAdmin
+          ? 'Each division runs independently — teams, schedules, and knockouts are managed per division.'
+          : 'Each division runs independently — browse teams, matches, and results per division.'}
       </p>
     </div>
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -38,6 +57,7 @@ const DivisionWorkflowCards = ({
         const teamCount = teamCounts[division.value] || 0;
         const matchCount = overview?.matches?.length || 0;
         const nextStep = getNextStep(overview, teamCount);
+        const guestLink = getGuestBrowseLink(overview, teamCount);
         const isCompleted = overview?.status === 'Completed';
         const isArchiving = archivingDivision === division.value;
 
@@ -63,7 +83,7 @@ const DivisionWorkflowCards = ({
                 </li>
               </ul>
             )}
-            {isAdmin && (
+            {isAdmin ? (
               <div className="flex flex-col gap-2">
                 <Link
                   to={nextStep.href}
@@ -83,6 +103,13 @@ const DivisionWorkflowCards = ({
                   </Button>
                 )}
               </div>
+            ) : (
+              <Link
+                to={guestLink.href}
+                className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline"
+              >
+                {guestLink.label} →
+              </Link>
             )}
           </Card>
         );

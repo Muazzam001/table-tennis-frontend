@@ -6,6 +6,13 @@ const STATUS_STYLES = {
   'Semifinals Active': 'bg-cyan-100 text-cyan-800',
   'Final Active': 'bg-purple-100 text-purple-800',
   Completed: 'bg-green-100 text-green-800',
+  'Level 1 Active': 'bg-green-100 text-green-800',
+  'Level 1 Complete': 'bg-teal-100 text-teal-800',
+  'Level 2 Active': 'bg-amber-100 text-amber-900',
+  'Level 2 Complete': 'bg-amber-50 text-amber-800',
+  'Level 3 Active': 'bg-red-100 text-red-800',
+  'Level 3 Complete': 'bg-red-50 text-red-700',
+  'Semifinals Complete': 'bg-cyan-50 text-cyan-700',
 };
 
 const TournamentStatusBadge = ({ status }) => (

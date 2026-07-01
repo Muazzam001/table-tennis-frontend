@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Button from '@/components/atoms/Button';
+import Modal from '@/components/atoms/Modal';
 import Input from '@/components/atoms/Input';
 import {
   getTimeSlotConfig,
@@ -231,17 +232,35 @@ const ScheduleWizard = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
-        <div className="p-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-            {divisionLabel && (
-              <p className="text-sm text-gray-600 mt-1">{divisionLabel}</p>
-            )}
-          </div>
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      subtitle={divisionLabel || undefined}
+      footer={
+        <div className="flex flex-wrap gap-3 justify-end">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+          {stepIndex > 0 && (
+            <Button type="button" variant="ghost" onClick={goBack} disabled={submitting}>
+              Back
+            </Button>
+          )}
 
-          <nav className="flex flex-wrap gap-2 mb-6" aria-label="Schedule wizard steps">
+          {step !== STEPS.REVIEW ? (
+            <Button type="button" variant="primary" onClick={goNext} disabled={submitting}>
+              Next
+            </Button>
+          ) : (
+            <Button type="button" variant="primary" onClick={handleSubmit} disabled={submitting}>
+              {submitting ? 'Creating…' : 'Create schedule'}
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <nav className="flex flex-wrap gap-2 mb-6" aria-label="Schedule wizard steps">
             {stepOrder.map((stepId, index) => {
               const isActive = index === stepIndex;
               const isComplete = index < stepIndex;
@@ -463,30 +482,7 @@ const ScheduleWizard = ({
               {submitError}
             </p>
           )}
-
-          <div className="flex flex-wrap gap-3 mt-6 pt-4 border-t border-gray-200">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-              Cancel
-            </Button>
-            {stepIndex > 0 && (
-              <Button type="button" variant="ghost" onClick={goBack} disabled={submitting}>
-                Back
-              </Button>
-            )}
-            <div className="flex-1" />
-            {step !== STEPS.REVIEW ? (
-              <Button type="button" variant="primary" onClick={goNext} disabled={submitting}>
-                Next
-              </Button>
-            ) : (
-              <Button type="button" variant="primary" onClick={handleSubmit} disabled={submitting}>
-                {submitting ? 'Creating…' : 'Create schedule'}
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -1,17 +1,18 @@
-import { useState, useEffect } from 'react';
 import Button from '@/components/atoms/Button';
+import Modal from '@/components/atoms/Modal';
+import DivisionTabs from '@/components/molecules/DivisionTabs';
 import PlayerCard from '@/components/molecules/PlayerCard';
 import PlayerForm from '@/components/molecules/PlayerForm';
-import DivisionTabs from '@/components/molecules/DivisionTabs';
-import { useAuth } from '@/contexts/AuthContext';
-import { getPlayers, createPlayer, updatePlayer, deletePlayer } from '@/services/playerService';
 import {
-  DIVISIONS,
   DEFAULT_TOURNAMENT_DIVISION,
+  DIVISIONS,
   countPlayersByDivision,
   filterPlayersForDivision,
 } from '@/constants/divisions';
+import { useAuth } from '@/contexts/AuthContext';
+import { createPlayer, deletePlayer, getPlayers, updatePlayer } from '@/services/playerService';
 import { showConfirm } from '@/utils/sweetAlert';
+import { useEffect, useState } from 'react';
 
 const PlayersPage = () => {
   const { isAdmin } = useAuth();
@@ -102,7 +103,9 @@ const PlayersPage = () => {
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Players</h2>
           <p className="text-gray-600 mt-1">
-            Manage tournament players ({players.length} total)
+            {isAdmin
+              ? `Manage tournament players (${players.length} total)`
+              : `Browse tournament players (${players.length} total) — read-only`}
           </p>
         </div>
         {isAdmin && (
@@ -137,19 +140,30 @@ const PlayersPage = () => {
         </div>
       )}
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <PlayerForm
-                player={editingPlayer}
-                onSubmit={handleSubmit}
-                onCancel={handleCancel}
-              />
-            </div>
+      <Modal
+        open={showForm}
+        onClose={handleCancel}
+        title={editingPlayer ? 'Edit Player' : 'Add New Player'}
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex gap-3 flex-row-reverse">
+            <Button type="submit" form="player-form" variant="primary">
+              {editingPlayer ? 'Update Player' : 'Add Player'}
+            </Button>
+            <Button type="button" variant="outline" onClick={handleCancel}>
+              Cancel
+            </Button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <PlayerForm
+          embedded
+          formId="player-form"
+          player={editingPlayer}
+          onSubmit={handleSubmit}
+          onCancel={handleCancel}
+        />
+      </Modal>
 
       {loading && (
         <div className="text-center py-12">
@@ -160,10 +174,12 @@ const PlayersPage = () => {
       {!loading && players.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <p className="text-gray-600 text-lg mb-4">No players found</p>
-          {isAdmin && (
+          {isAdmin ? (
             <Button onClick={handleAddNew} variant="primary">
               Add Your First Player
             </Button>
+          ) : (
+            <p className="text-gray-500 text-sm">Players will appear here once they are registered.</p>
           )}
         </div>
       )}
@@ -173,10 +189,12 @@ const PlayersPage = () => {
           <p className="text-gray-600 text-lg mb-2">
             No players in {selectedDivisionMeta?.label || selectedDivision} yet.
           </p>
-          {isAdmin && (
+          {isAdmin ? (
             <Button onClick={handleAddNew} variant="primary" className="mt-4">
               Add Player
             </Button>
+          ) : (
+            <p className="text-gray-500 text-sm">No players are listed for this division yet.</p>
           )}
         </div>
       )}

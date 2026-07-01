@@ -14,6 +14,9 @@ const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
           <h3 className="text-xl font-semibold text-gray-900">{player.name}</h3>
           <div className="flex items-center gap-2">
             <Badge variant={badgeVariant}>{divisionLabel}</Badge>
+            {player.pyramid_tier != null && (
+              <Badge variant={`tier${player.pyramid_tier}`}>T{player.pyramid_tier}</Badge>
+            )}
             {!player.is_active && <Badge variant="default">Inactive</Badge>}
           </div>
         </div>

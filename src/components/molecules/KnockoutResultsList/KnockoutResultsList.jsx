@@ -52,7 +52,7 @@ const KnockoutMatchCard = ({ match }) => {
 
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs text-gray-500">
-          Best of {totalSets} {hasResult ? `· (${match.score_team1 ?? 0} - ${match.score_team2 ?? 0}` : ''})
+          Best of {totalSets} {hasResult ? `· (${match.score_team1 ?? 0} - ${match.score_team2 ?? 0})` : ''}
         </p>
 
         <span className="text-xs text-gray-500">{formatDate(match.scheduled_date)}</span>
@@ -102,7 +102,7 @@ const KnockoutRoundSection = ({ title, matches, roundType }) => {
   const style = ROUND_STYLES[roundType] || ROUND_STYLES['Quarter Final'];
 
   return (
-    <div className={`bg-white rounded-lg shadow border p-6 ${style.sectionClass}`}>
+    <div className={`bg-white rounded-lg shadow border p-5 ${style.sectionClass}`}>
       <h3 className="text-2xl font-bold text-gray-900 mb-4">{title}</h3>
       <div className={style.gridClass}>
         {matches.map((match) => (
@@ -136,7 +136,7 @@ const KnockoutResultsList = ({ matches = [] }) => {
   if (!hasAny) {
     return (
       <div className="text-center py-8 text-gray-600 bg-white rounded-lg border border-gray-200">
-        No knockout matches yet. Complete the group stage and generate knockout rounds on the
+        No knockout-style matches yet. Complete earlier stages and generate semi-finals on the
         Matches page.
       </div>
     );

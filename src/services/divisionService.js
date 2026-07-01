@@ -16,3 +16,11 @@ export const updateDivisionFormat = async (division, competitionFormat) => {
   });
   return response.data;
 };
+
+export const updateDivisionTournamentFormat = async (division, tournamentFormat, formatConfig = null) => {
+  const response = await api.put(`/divisions/${encodeURIComponent(division)}`, {
+    tournament_format: tournamentFormat,
+    format_config: formatConfig,
+  });
+  return response.data;
+};

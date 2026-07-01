@@ -45,6 +45,7 @@ const TournamentHistoryDetailPage = () => {
   const finalResult = overview?.finalResult || {
     championTeamName: archive?.championTeamName,
     runnerUpTeamName: archive?.runnerUpTeamName,
+    thirdPlaceTeamName: overview?.finalResult?.thirdPlaceTeamName ?? null,
   };
 
   return (

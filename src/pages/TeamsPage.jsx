@@ -1,23 +1,25 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import Button from '@/components/atoms/Button';
-import TeamCard from '@/components/molecules/TeamCard';
-import TeamCardPreview from '@/components/molecules/TeamCardPreview';
 import DivisionTabs from '@/components/molecules/DivisionTabs';
 import GroupAssignmentsTable from '@/components/molecules/GroupAssignmentsTable';
+import TeamCard from '@/components/molecules/TeamCard';
+import TeamCardPreview from '@/components/molecules/TeamCardPreview';
+import { buildDivisionMap, countPlayersByDivision, DEFAULT_TOURNAMENT_DIVISION, DIVISIONS, filterPlayersForDivision, getCompetitionFormatLabel } from '@/constants/divisions';
+import { DEFAULT_TOURNAMENT_FORMAT, getTournamentFormatLabel, TOURNAMENT_FORMATS } from '@/constants/tournamentFormats';
 import { useAuth } from '@/contexts/AuthContext';
-import { getTeams, saveTeamsForDivision, deleteTeam, updateTeam } from '@/services/teamService';
-import { buildDefaultTeamName, resolveTeamDivision } from '@/utils/teamNaming';
+import { getDivisionSettings, updateDivisionFormat, updateDivisionTournamentFormat } from '@/services/divisionService';
 import { getPlayers } from '@/services/playerService';
-import { getDivisionGroups } from '@/services/tournamentService';
-import { getDivisionSettings, updateDivisionFormat } from '@/services/divisionService';
 import { getEffectivePairingRules } from '@/services/teamPairingRuleService';
-import { buildDoublesTeamsWithPairingRules } from '@shared/tournament/teamPairing.js';
-import { DIVISIONS, DEFAULT_TOURNAMENT_DIVISION, getCompetitionFormatLabel, buildDivisionMap, countPlayersByDivision, filterPlayersForDivision } from '@/constants/divisions';
+import { deleteTeam, getTeams, saveTeamsForDivision, updateTeam } from '@/services/teamService';
+import { getDivisionGroups } from '@/services/tournamentService';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
+import { buildDefaultTeamName, resolveTeamDivision } from '@/utils/teamNaming';
+import { buildDoublesTeamsWithPairingRules } from '@shared/tournament/teamPairing.js';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 const EMPTY_PREVIEW = buildDivisionMap([]);
 const DEFAULT_FORMATS = buildDivisionMap('doubles');
+const DEFAULT_TOURNAMENT_FORMATS = buildDivisionMap(DEFAULT_TOURNAMENT_FORMAT);
 
 const getDivisionPlayerCount = (playerStats, division) =>
   playerStats.countsByDivision?.[division] ?? 0;
@@ -46,6 +48,7 @@ const TeamsPage = () => {
   const [saving, setSaving] = useState(false);
   const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
   const [divisionFormats, setDivisionFormats] = useState({ ...DEFAULT_FORMATS });
+  const [divisionTournamentFormats, setDivisionTournamentFormats] = useState({ ...DEFAULT_TOURNAMENT_FORMATS });
   const [formatSaving, setFormatSaving] = useState(false);
   const [divisionGroups, setDivisionGroups] = useState([]);
   const [teamGroupMap, setTeamGroupMap] = useState({});
@@ -68,10 +71,13 @@ const TeamsPage = () => {
     try {
       const settings = await getDivisionSettings();
       const formats = { ...DEFAULT_FORMATS };
+      const tournamentFormats = { ...DEFAULT_TOURNAMENT_FORMATS };
       for (const row of settings) {
         formats[row.division] = row.competition_format || 'doubles';
+        tournamentFormats[row.division] = row.tournament_format || DEFAULT_TOURNAMENT_FORMAT;
       }
       setDivisionFormats(formats);
+      setDivisionTournamentFormats(tournamentFormats);
     } catch (err) {
       console.error('Error loading division formats:', err);
     }
@@ -147,7 +153,7 @@ const TeamsPage = () => {
       for (let i = 0; i < shuffledPlayers.length; i += 1) {
         const player = shuffledPlayers[i];
         generatedTeams.push({
-          team_name: buildDefaultTeamName(i + 1),
+          team_name: String(player.name || '').trim() || buildDefaultTeamName(i + 1),
           player1_id: player.id,
           player1_name: player.name,
           player1_expertise: player.expertise_level,
@@ -199,6 +205,29 @@ const TeamsPage = () => {
       setPreviewTeamsByDivision((prev) => ({ ...prev, [selectedDivision]: [] }));
     } catch (err) {
       setError(err.message || 'Failed to update competition format');
+    } finally {
+      setFormatSaving(false);
+    }
+  };
+
+  const handleTournamentFormatChange = async (newFormat) => {
+    if (newFormat === selectedTournamentFormat) return;
+
+    const existingDivisionTeams = teamsByDivision(selectedDivision);
+    if (existingDivisionTeams.length > 0) {
+      setError(
+        `Cannot change tournament format while teams exist in ${selectedDivisionLabel}. Delete teams first.`
+      );
+      return;
+    }
+
+    try {
+      setFormatSaving(true);
+      setError(null);
+      await updateDivisionTournamentFormat(selectedDivision, newFormat);
+      setDivisionTournamentFormats((prev) => ({ ...prev, [selectedDivision]: newFormat }));
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to update tournament format');
     } finally {
       setFormatSaving(false);
     }
@@ -351,6 +380,7 @@ const TeamsPage = () => {
     DIVISIONS.find((l) => l.value === selectedDivision)?.label || selectedDivision;
 
   const selectedCompetitionFormat = divisionFormats[selectedDivision] || 'doubles';
+  const selectedTournamentFormat = divisionTournamentFormats[selectedDivision] || DEFAULT_TOURNAMENT_FORMAT;
   const isSinglesDivision = selectedCompetitionFormat === 'singles';
   const entrantLabel = isSinglesDivision ? 'entrants' : 'teams';
   const entrantLabelSingular = isSinglesDivision ? 'entrant' : 'team';
@@ -384,7 +414,9 @@ const TeamsPage = () => {
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Teams</h2>
           <p className="text-gray-600 mt-1">
-            Manage teams per division — each division has its own generation and tournament flow
+            {isAdmin
+              ? 'Manage teams per division — each division has its own generation and tournament flow'
+              : 'Browse teams per division — read-only view'}
           </p>
         </div>
         {isAdmin && (
@@ -399,7 +431,9 @@ const TeamsPage = () => {
 
       {/* Requirements Info Card */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">Generation Requirements</h3>
+        <h3 className="font-semibold text-blue-900 mb-2">
+          {isAdmin ? 'Generation Requirements' : 'Division overview'}
+        </h3>
         <ul className="text-sm text-blue-800 space-y-1">
           {DIVISIONS.map((division) => {
             const count = getDivisionPlayerCount(playerStats, division.value);
@@ -411,10 +445,12 @@ const TeamsPage = () => {
               </li>
             );
           })}
-          <li className="text-blue-700">
-            Each division can be singles or doubles — choose the format before generating {entrantLabel}.
-            {!isSinglesDivision && ' Doubles generation uses pairing rules when configured.'}
-          </li>
+          {isAdmin && (
+            <li className="text-blue-700">
+              Each division can be singles or doubles — choose the format before generating {entrantLabel}.
+              {!isSinglesDivision && ' Doubles generation uses pairing rules when configured.'}
+            </li>
+          )}
         </ul>
       </div>
 
@@ -442,7 +478,9 @@ const TeamsPage = () => {
             <div>
               <h3 className="font-semibold text-gray-900">{selectedDivisionLabel}</h3>
               <p className="text-sm text-gray-600 mt-1">
-                Format: <span className="font-medium">{getCompetitionFormatLabel(selectedCompetitionFormat)}</span>
+                Competition: <span className="font-medium">{getCompetitionFormatLabel(selectedCompetitionFormat)}</span>
+                {' · '}
+                Tournament: <span className="font-medium">{getTournamentFormatLabel(selectedTournamentFormat)}</span>
                 {' — '}
                 Generate and save {entrantLabel} for this division only.
               </p>
@@ -459,8 +497,22 @@ const TeamsPage = () => {
                 <option value="doubles">Doubles (2-player teams)</option>
                 <option value="singles">Singles (individual players)</option>
               </select>
+              <span className="text-sm text-gray-700 ml-2">Tournament format:</span>
+              <select
+                value={selectedTournamentFormat}
+                onChange={(e) => handleTournamentFormatChange(e.target.value)}
+                disabled={formatSaving || activeTeams.length > 0}
+                className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white disabled:opacity-60"
+                aria-label={`Tournament format for ${selectedDivisionLabel}`}
+              >
+                {TOURNAMENT_FORMATS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
               {activeTeams.length > 0 && (
-                <span className="text-xs text-amber-700">Delete existing {entrantLabel} to change format</span>
+                <span className="text-xs text-amber-700">Delete existing {entrantLabel} to change formats</span>
               )}
             </div>
           </div>
@@ -476,11 +528,17 @@ const TeamsPage = () => {
 
       {!loading && activeTeams.length > 0 && divisionGroups.length === 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-900">
-          Group assignments appear after you generate the group-stage schedule on the{' '}
-          <Link to="/matches" className="font-medium underline">
-            Matches page
-          </Link>
-          .
+          {isAdmin ? (
+            <>
+              Group assignments appear after you generate the group-stage schedule on the{' '}
+              <Link to="/matches" className="font-medium underline">
+                Matches page
+              </Link>
+              .
+            </>
+          ) : (
+            'Group assignments will appear here once the group-stage schedule is published.'
+          )}
         </div>
       )}
 
@@ -488,8 +546,8 @@ const TeamsPage = () => {
         <GroupAssignmentsTable groups={divisionGroups} division={selectedDivision} />
       )}
 
-      {/* Preview Section */}
-      {hasPreviewForSelected && (
+      {/* Preview Section — admin only */}
+      {isAdmin && hasPreviewForSelected && (
         <div id="preview-section" className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -562,9 +620,11 @@ const TeamsPage = () => {
               <div className="text-6xl mb-4">🏓</div>
               <p className="text-gray-600 text-lg mb-2">No teams created yet</p>
               <p className="text-gray-500 text-sm mb-6">
-                Select a division tab and click &quot;Generate … Teams&quot; to create teams for that division
+                {isAdmin
+                  ? `Select a division tab and click "Generate … Teams" to create teams for that division`
+                  : 'Teams will appear here once they are created for a division'}
               </p>
-              {!canGenerateForSelectedDivision && (
+              {isAdmin && !canGenerateForSelectedDivision && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
                   <p className="text-yellow-800 text-sm">
                     {playerStats.total === 0 && 'Add players first'}
@@ -582,7 +642,9 @@ const TeamsPage = () => {
                 No teams in {selectedDivisionLabel}
               </p>
               <p className="text-gray-500 text-sm">
-                Use the generate button above to create teams for this division
+                {isAdmin
+                  ? 'Use the generate button above to create teams for this division'
+                  : 'No teams are registered for this division yet.'}
               </p>
             </div>
           )}

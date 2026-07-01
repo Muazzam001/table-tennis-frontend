@@ -77,19 +77,8 @@ export const generateRandomTeams = async (division) => {
 // Save multiple teams to database for a division (replaces existing teams in that division)
 export const saveTeamsForDivision = async (teams, division) => {
   try {
-    await deleteTeamsByDivision(division);
-
-    const savedTeams = [];
-    for (const team of teams) {
-      const response = await api.post('/teams', {
-        team_name: team.team_name,
-        player1_id: team.player1_id,
-        player2_id: team.player2_id ?? undefined,
-        division,
-      });
-      savedTeams.push(response.data || response);
-    }
-    return savedTeams;
+    const response = await api.put(`/teams/division/${encodeURIComponent(division)}`, { teams });
+    return response.data?.teams || response.teams || [];
   } catch (error) {
     throw error;
   }

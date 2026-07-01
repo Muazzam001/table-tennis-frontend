@@ -20,9 +20,9 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSing
   const players = isSingles || team.player2_id == null
     ? [{ name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise }]
     : [
-        { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
-        { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
-      ];
+      { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
+      { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
+    ];
 
   const handleStartEdit = () => {
     setDraftName(displayName);
@@ -58,11 +58,12 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSing
                 teamName={draftName}
                 fallbackNumber={team.id}
                 onChange={setDraftName}
+                isSingles={isSingles || team.player2_id == null}
               />
             </div>
           ) : (
             <h3 className="text-xl text-gray-900">
-              <span className="font-medium">{isSingles || team.player2_id == null ? 'Player' : 'Team'}</span>{' '}
+              <span className="font-medium">{isSingles || team.player2_id == null ? '' : 'Team'}</span>{' '}
               <span className="font-bold">{displayName}</span>
             </h3>
           )}
@@ -71,32 +72,8 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSing
               <Badge variant="success">Group {groupId}</Badge>
             )}
           </div>
-        </div>
-
-        <div className="space-y-3">
-          {players.map((p, idx) => (
-            <div
-              key={idx}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
-            >
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">{p.name}</p>
-                {/* <p className="text-xs text-gray-600">Player ID: {p.id}</p> */}
-              </div>
-              <Badge variant={getExpertiseBadgeVariant(p.expertise)}>
-                {p.expertise}
-              </Badge>
-            </div>
-          ))}
-        </div>
-
-        {isAdmin && (
-          <div className="flex gap-2 justify-between items-center flex-wrap pt-2 border-t border-gray-200 mt-auto">
-            <span>
-              {divisionBadge}
-            </span>
-
-            <div className="flex gap-2 justify-end">
+          {isAdmin && (
+            <div className="flex gap-2 justify-end items-center flex-wrap">
               {editing ? (
                 <>
                   <Button variant="outline" size="sm" onClick={handleCancel} disabled={saving}>
@@ -126,8 +103,35 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSing
                 </>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {players.map((p, idx) => (
+            <div
+              key={idx}
+              className="flex flex-col gap-2"
+            >
+              {!(isSingles || team.player2_id == null) && (
+                <div className="flex-1 flex gap-2 justify-between items-center p-3 bg-gray-100 rounded-lg border border-gray-300">
+                  <p className="font-medium text-gray-900">{p.name}</p>
+                  <p className="text-xs text-gray-600">Player ID: {p.id}</p>
+                </div>
+              )}
+
+              <div className="flex-1 flex gap-2 justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-200">
+                <span>
+                  {divisionBadge}
+                </span>
+
+                <Badge variant={getExpertiseBadgeVariant(p.expertise)}>
+                  {p.expertise}
+                </Badge>
+              </div>
+            </div>
+          ))}
+        </div>
+
       </div>
     </div>
   );

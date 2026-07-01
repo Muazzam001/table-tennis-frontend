@@ -1,8 +1,8 @@
+import Card from '@/components/atoms/Card';
+import { DIVISIONS } from '@/constants/divisions';
+import { getTournamentHistory } from '@/services/tournamentArchiveService';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Card from '@/components/atoms/Card';
-import { getTournamentHistory } from '@/services/tournamentArchiveService';
-import { DIVISIONS } from '@/constants/divisions';
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -54,11 +54,10 @@ const TournamentHistoryPage = () => {
         <button
           type="button"
           onClick={() => setSelectedDivision('all')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            selectedDivision === 'all'
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedDivision === 'all'
               ? 'bg-red-600 text-white'
               : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-          }`}
+            }`}
         >
           All divisions
         </button>
@@ -67,11 +66,10 @@ const TournamentHistoryPage = () => {
             key={division.value}
             type="button"
             onClick={() => setSelectedDivision(division.value)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedDivision === division.value
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedDivision === division.value
                 ? 'bg-red-600 text-white'
                 : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-            }`}
+              }`}
           >
             {division.label}
           </button>
@@ -91,8 +89,7 @@ const TournamentHistoryPage = () => {
           <div className="text-6xl mb-4">📜</div>
           <p className="text-gray-600 text-lg mb-2">No archived tournaments yet</p>
           <p className="text-gray-500 text-sm">
-            When a division tournament is completed, an admin can archive it from the home page or
-            tournament page to preserve results here.
+            When a division tournament is completed, results are archived here for future reference.
           </p>
         </div>
       )}

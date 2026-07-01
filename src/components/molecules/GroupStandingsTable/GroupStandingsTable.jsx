@@ -6,7 +6,7 @@ const formatGD = (value) => {
   return formatted;
 };
 
-const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2 }) => (
+const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2, qualifierLabel }) => (
   <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
     <h3 className="text-xl font-bold text-gray-900 mb-4">Group {groupId} Standings</h3>
     <div className="overflow-x-auto">
@@ -29,7 +29,7 @@ const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2 }) => (
             standings.map((team) => (
               <tr
                 key={team.id}
-                className={team.rank <= qualifiersCount ? 'bg-green-50' : ''}
+                className={(team.matches_played > 0 && team.rank <= qualifiersCount) ? 'bg-green-50' : ''}
               >
                 <td className="p-2 font-semibold">{team.rank}</td>
                 <td className="p-2 font-medium">{team.team_name}</td>
@@ -52,8 +52,10 @@ const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2 }) => (
         </tbody>
       </table>
       <p className="text-xs text-gray-500 mt-2">
-        Top {qualifiersCount} teams qualify for knockout stage. GD uses NRR-style set rates
-        (sets won per match − sets lost per match). Tie-break order: points → GD → head-to-head.
+        Top {qualifiersCount} {qualifierLabel || 'teams qualify for knockout stage'}. GD uses NRR-style set rates
+        (sets won per match − sets lost per match). Tie-break order: points → set GD → game-point GD → margin
+        quality (knockout/shutout) → dominance → mini-league → head-to-head. Game length (11 or 21) is set on
+        the Matches page; enter per-set scores for accurate tie-breaks.
       </p>
     </div>
   </div>

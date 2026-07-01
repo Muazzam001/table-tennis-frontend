@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import Button from '@/components/atoms/Button';
-import DivisionTabs from '@/components/molecules/DivisionTabs';
 import TournamentStatusBadge from '@/components/atoms/TournamentStatusBadge/TournamentStatusBadge';
+import DivisionTabs from '@/components/molecules/DivisionTabs';
 import TournamentResultsPanel from '@/components/molecules/TournamentResultsPanel/TournamentResultsPanel';
-import { useAuth } from '@/contexts/AuthContext';
-import { getTournamentOverview } from '@/services/tournamentService';
-import { archiveTournament } from '@/services/tournamentArchiveService';
-import { showConfirm, showSuccess } from '@/utils/sweetAlert';
 import { DEFAULT_TOURNAMENT_DIVISION } from '@/constants/divisions';
+import { isTierPyramidFormat } from '@/constants/tournamentFormats';
+import { useAuth } from '@/contexts/AuthContext';
+import { archiveTournament } from '@/services/tournamentArchiveService';
+import { getTournamentOverview } from '@/services/tournamentService';
+import { showConfirm, showSuccess } from '@/utils/sweetAlert';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 const TournamentPage = () => {
   const { isAdmin } = useAuth();
@@ -67,18 +68,48 @@ const TournamentPage = () => {
     (overview?.matches?.length || 0) > 0 ||
     Object.keys(overview?.standings || {}).length > 0;
 
+  const isPyramid = isTierPyramidFormat(overview?.format || overview?.tournament_format);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Tournament</h2>
           <p className="text-gray-600 mt-1">
-            Standings, knockout bracket, and match results — schedule and update scores on the{' '}
-            <Link to="/matches" className="text-red-600 font-medium hover:underline">
-              Matches page
-            </Link>
+            {isAdmin ? (
+              isPyramid ? (
+                <>
+                  Tier Pyramid standings, crossover bracket, and progression — update scores on the{' '}
+                  <Link to="/matches" className="text-red-600 font-medium hover:underline">
+                    Matches page
+                  </Link>
+                </>
+              ) : (
+                <>
+                  Standings, knockout bracket, and match results — schedule and update scores on the{' '}
+                  <Link to="/matches" className="text-red-600 font-medium hover:underline">
+                    Matches page
+                  </Link>
+                </>
+              )
+            ) : isPyramid ? (
+              <>
+                Tier Pyramid standings, crossover bracket, and progression — browse match details on the{' '}
+                <Link to="/matches" className="text-red-600 font-medium hover:underline">
+                  Matches page
+                </Link>
+              </>
+            ) : (
+              <>
+                Standings, knockout bracket, and match results — browse schedules and scores on the{' '}
+                <Link to="/matches" className="text-red-600 font-medium hover:underline">
+                  Matches page
+                </Link>
+              </>
+            )}
           </p>
         </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           {overview?.status && <TournamentStatusBadge status={overview.status} />}
           {isAdmin && overview?.status === 'Completed' && (
@@ -107,6 +138,7 @@ const TournamentPage = () => {
         error={error}
         onRefresh={loadOverview}
         showRefresh={false}
+        readOnly={!isAdmin}
       />
     </div>
   );
