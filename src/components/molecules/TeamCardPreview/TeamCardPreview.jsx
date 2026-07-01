@@ -1,23 +1,23 @@
-import Badge from '../../atoms/Badge';
+import Badge from '@/components/atoms/Badge';
 import TeamNameEditor from '../TeamNameEditor/TeamNameEditor';
-import { getLeagueLabel, resolveTeamLeague } from '../../../utils/teamNaming';
+import { getDivisionLabel, resolveTeamDivision } from '@/utils/teamNaming';
+import { getDivisionBadgeVariant, getExpertiseBadgeVariant } from '@/utils/divisionBadge';
 
-const TeamCardPreview = ({ team, onNameChange, index }) => {
-  const league = resolveTeamLeague(team);
+const TeamCardPreview = ({ team, onNameChange, index, isSingles = false }) => {
+  const division = resolveTeamDivision(team);
   const teamNumber = index + 1;
 
-  const leagueBadge = (() => {
-    const label = getLeagueLabel(league);
-    if (league === 'Expert') return <Badge variant="expert">{label}</Badge>;
-    if (league === 'Intermediate') return <Badge variant="intermediate">{label}</Badge>;
-    if (league === 'Women') return <Badge variant="secondary">{label}</Badge>;
-    return <Badge variant="primary">{label}</Badge>;
+  const divisionBadge = (() => {
+    const label = getDivisionLabel(division);
+    return <Badge variant={getDivisionBadgeVariant(division)}>{label}</Badge>;
   })();
 
-  const players = [
-    { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
-    { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
-  ];
+  const players = isSingles || team.player2_id == null
+    ? [{ name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise }]
+    : [
+        { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
+        { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
+      ];
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 border-2 border-dashed border-blue-300 hover:border-blue-400 transition-colors">
@@ -31,7 +31,7 @@ const TeamCardPreview = ({ team, onNameChange, index }) => {
               onChange={(name) => onNameChange(index, name)}
             />
           </div>
-          {leagueBadge}
+          {divisionBadge}
         </div>
 
         <div className="space-y-3">
@@ -44,7 +44,7 @@ const TeamCardPreview = ({ team, onNameChange, index }) => {
                 <p className="font-medium text-gray-900">{p.name}</p>
                 <p className="text-xs text-gray-600">Player ID: {p.id}</p>
               </div>
-              <Badge variant={p.expertise === 'Expert' ? 'expert' : 'intermediate'}>
+              <Badge variant={getExpertiseBadgeVariant(p.expertise)}>
                 {p.expertise}
               </Badge>
             </div>

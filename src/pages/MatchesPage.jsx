@@ -1,29 +1,76 @@
-import { useState, useEffect } from 'react';
-import Button from '../components/atoms/Button';
-import MatchCard from '../components/molecules/MatchCard';
-import MatchResultForm from '../components/molecules/MatchResultForm';
-import { useAuth } from '../contexts/AuthContext';
+import Button from '@/components/atoms/Button';
+import LoadingOverlay from '@/components/atoms/LoadingOverlay';
+import Modal from '@/components/atoms/Modal';
+import DivisionTabs from '@/components/molecules/DivisionTabs';
+import MatchCard from '@/components/molecules/MatchCard';
+import MatchDetailPanel from '@/components/molecules/MatchDetailPanel';
+import MatchResultForm from '@/components/molecules/MatchResultForm';
+import PyramidAdminPanel from '@/components/molecules/PyramidAdminPanel/PyramidAdminPanel';
+import ScheduleWizard from '@/components/molecules/ScheduleWizard';
+import TierAssignmentPanel from '@/components/molecules/TierAssignmentPanel/TierAssignmentPanel';
+import TierPyramidSetupPanel from '@/components/molecules/TierPyramidSetupPanel/TierPyramidSetupPanel';
+import TournamentSetupPanel from '@/components/molecules/TournamentSetupPanel/TournamentSetupPanel';
+import { getCourtConfig, getCourtSummary, saveCourtConfig } from '@/config/courtConfig';
 import {
-  getMatches,
-  getMatchesByRound,
+  GAME_POINT_OPTIONS,
+  GROUP_STAGE_SET_ROUNDS,
+  TIER_PYRAMID_SET_ROUNDS,
+  getMatchSetConfig,
+  getMatchSetRoundLabel,
+  resetMatchSetConfig,
+  saveMatchSetConfig,
+} from '@/config/matchSetConfig';
+import { getTimeSlotConfig, getTimeSlotSummary, saveTimeSlotConfig } from '@/config/timeSlotConfig';
+import { DEFAULT_TOURNAMENT_DIVISION, DIVISIONS, buildDivisionMap } from '@/constants/divisions';
+import { DEFAULT_TOURNAMENT_FORMAT, isTierPyramidFormat } from '@/constants/tournamentFormats';
+import { useAuth } from '@/contexts/AuthContext';
+import { getDivisionSettings } from '@/services/divisionService';
+import {
+  autoFillMatchResults,
+  generateFinal,
   generateMatchSchedule,
-  createMultipleMatches,
-  updateMatchResult,
   generateQuarterFinals,
   generateSemiFinals,
-  generateFinal
-} from '../services/matchService';
-import { getTeams } from '../services/teamService';
-import { getTournamentSetup } from '../services/tournamentService';
-import TournamentSetupPanel from '../components/molecules/TournamentSetupPanel/TournamentSetupPanel';
+  getMatches,
+  updateMatchResult
+} from '@/services/matchService';
+import { getTeams, updateTeam } from '@/services/teamService';
+import { assignPyramidTiers, getPyramidProgressionLog, getPyramidTiers, overridePyramidAdvancement, regeneratePyramidStage } from '@/services/tierPyramidService';
+import { getTournamentSetup } from '@/services/tournamentService';
+import {
+  groupMatchesByRoundRobinRounds,
+  summarizeLevel1Schedule,
+} from '@/utils/level1Matches';
+import { showConfirm, showSuccess } from '@/utils/sweetAlert';
+import { derivePyramidTournamentStatus } from '@shared/tournament/formats/tierPyramid/advancement.js';
+import { filterMatchesForPyramidRound } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
+import { useEffect, useMemo, useState } from 'react';
 
-const LEAGUES = [
-  { value: 'Expert', label: 'Expert League' },
-  { value: 'Intermediate', label: 'Intermediate League' },
-  { value: 'Women', label: 'Women League' }
+const getDivision = (item) => item?.division ?? null;
+
+const KNOCKOUT_ROUND_TABS = [
+  { value: 'Qualifying', label: 'Qualifying Round' },
+  { value: 'Quarter Final', label: 'Quarter Finals' },
+  { value: 'Semi Final', label: 'Semi Finals' },
+  { value: 'Third Place', label: 'Third Place' },
+  { value: 'Final', label: 'Final' },
 ];
 
-const getLeague = (item) => item.league || 'Expert';
+const PYRAMID_ROUND_TABS = [
+  { value: 'Level 1', label: 'Level 1 (S1 + S2)' },
+  { value: 'Level 2', label: 'Level 2' },
+  { value: 'Level 3', label: 'Level 3' },
+  { value: 'Semi Final', label: 'Semi Finals' },
+  { value: 'Third Place', label: 'Third Place' },
+  { value: 'Final', label: 'Final' },
+];
+
+const roundHasMatches = (divisionMatches, roundValue, isPyramid) => {
+  if (isPyramid) {
+    return filterMatchesForPyramidRound(divisionMatches, roundValue).length > 0;
+  }
+  return divisionMatches.some((m) => m.round_type === roundValue);
+};
 
 const MatchesPage = () => {
   const { isAdmin } = useAuth();
@@ -33,20 +80,75 @@ const MatchesPage = () => {
   const [error, setError] = useState(null);
   const [selectedRound, setSelectedRound] = useState('Qualifying');
   const [showResultForm, setShowResultForm] = useState(false);
+  const [showMatchDetail, setShowMatchDetail] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generatingQF, setGeneratingQF] = useState(false);
   const [generatingSF, setGeneratingSF] = useState(false);
   const [generatingFinal, setGeneratingFinal] = useState(false);
-  const [selectedLeague, setSelectedLeague] = useState('Expert');
+  const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
+  const [setupLoading, setSetupLoading] = useState(false);
   const [setupOptions, setSetupOptions] = useState(null);
   const [selectedGroupCount, setSelectedGroupCount] = useState(null);
+  const [setConfig, setSetConfig] = useState(getMatchSetConfig);
+  const [timeSlotConfig, setTimeSlotConfig] = useState(getTimeSlotConfig);
+  const [courtConfig, setCourtConfig] = useState(getCourtConfig);
+  const [scheduleWizard, setScheduleWizard] = useState(null);
+  const [divisionTournamentFormats, setDivisionTournamentFormats] = useState(buildDivisionMap(DEFAULT_TOURNAMENT_FORMAT));
+  const [divisionCompetitionFormats, setDivisionCompetitionFormats] = useState(buildDivisionMap('doubles'));
+  const [tierAssignments, setTierAssignments] = useState({});
+  const [pyramidTierState, setPyramidTierState] = useState(null);
+  const [tierSaving, setTierSaving] = useState(false);
+  const [entrantNameSavingId, setEntrantNameSavingId] = useState(null);
+  const [progressionLog, setProgressionLog] = useState([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [pyramidAdminSaving, setPyramidAdminSaving] = useState(false);
+  const [autoFillingRound, setAutoFillingRound] = useState(null);
+  const [autoFillingLabel, setAutoFillingLabel] = useState('');
+  const timeSlotSummary = getTimeSlotSummary(timeSlotConfig);
+  const courtSummary = getCourtSummary(courtConfig);
+  const matchesPerWeekday = timeSlotSummary.slotsPerWeekday * courtConfig.courtCount;
 
-  const leagueTeams = teams.filter(t => getLeague(t) === selectedLeague);
-  const leagueMatches = matches.filter(m => getLeague(m) === selectedLeague);
-  const quarterFinalMatches = leagueMatches.filter((m) => m.round_type === 'Quarter Final');
-  const semiFinalMatches = leagueMatches.filter((m) => m.round_type === 'Semi Final');
-  const skipsSemiFinals = setupOptions?.defaultGroupCount === 2;
+  const divisionTeams = teams.filter(t => getDivision(t) === selectedDivision);
+  const divisionMatches = matches.filter(m => getDivision(m) === selectedDivision);
+  const selectedTournamentFormat = divisionTournamentFormats[selectedDivision] || DEFAULT_TOURNAMENT_FORMAT;
+  const selectedCompetitionFormat = divisionCompetitionFormats[selectedDivision] || 'doubles';
+  const isSinglesDivision = selectedCompetitionFormat === 'singles';
+  const isTierPyramid = isTierPyramidFormat(selectedTournamentFormat) || setupOptions?.format === 'tier-pyramid';
+  const level1Matches = divisionMatches.filter((m) => m.round_type === 'S1' || m.round_type === 'S2');
+  const teamTierMap = Object.fromEntries(
+    (pyramidTierState?.teams || divisionTeams).map((t) => [t.id, tierAssignments[t.id] ?? t.tier])
+  );
+  const pyramidStatus = isTierPyramid ? derivePyramidTournamentStatus(divisionMatches) : null;
+  const pyramidAdminTeams = (pyramidTierState?.teams || divisionTeams).map((t) => ({
+    ...t,
+    tier: tierAssignments[t.id] ?? t.tier,
+  }));
+  const quarterFinalMatches = divisionMatches.filter((m) => m.round_type === 'Quarter Final');
+  const semiFinalMatches = divisionMatches.filter((m) => m.round_type === 'Semi Final');
+  const isSingleGroup = Boolean(
+    setupOptions?.isSingleGroup || setupOptions?.suggestedConfig?.format === 'single-group'
+  );
+  const configuredTeamCount = setupOptions?.teamCount ?? divisionTeams.length;
+  const skipsQuarterFinals = isSingleGroup;
+  const skipsSemiFinals = isSingleGroup
+    ? configuredTeamCount === 4
+    : setupOptions?.defaultGroupCount === 2;
+  const qualifyingMatches = divisionMatches.filter((m) => m.round_type === 'Qualifying');
+  const qualifyingComplete =
+    qualifyingMatches.length > 0 &&
+    qualifyingMatches.every((m) => m.status === 'Completed');
+  const firstKnockoutLabel = isSingleGroup
+    ? configuredTeamCount === 4
+      ? '🏆 Generate Final'
+      : '🏆 Generate Semi Finals'
+    : '🏆 Generate Quarter Finals';
+  const canGenerateFirstKnockout =
+    qualifyingComplete &&
+    quarterFinalMatches.length === 0 &&
+    semiFinalMatches.length === 0 &&
+    divisionMatches.filter((m) => m.round_type === 'Final').length === 0;
+
   const quarterFinalsComplete =
     quarterFinalMatches.length > 0 &&
     quarterFinalMatches.every((m) => m.status === 'Completed');
@@ -54,38 +156,236 @@ const MatchesPage = () => {
     semiFinalMatches.length === 2 &&
     semiFinalMatches.every((m) => m.status === 'Completed');
   const canGenerateFinal =
-    leagueMatches.filter((m) => m.round_type === 'Final').length === 0 &&
+    divisionMatches.filter((m) => m.round_type === 'Final').length === 0 &&
     (semiFinalsComplete || (skipsSemiFinals && quarterFinalMatches.length === 2 && quarterFinalsComplete));
 
-  // Load data on mount
+  // Load data when division changes
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData(selectedDivision);
+  }, [selectedDivision]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadSetup = async () => {
+      setSetupLoading(true);
+      setSetupOptions(null);
+      setSelectedGroupCount(null);
       try {
-        const setup = await getTournamentSetup(selectedLeague);
+        const [setup, settingsRows] = await Promise.all([
+          getTournamentSetup(selectedDivision, { timeSlotConfig, courtConfig }),
+          getDivisionSettings(),
+        ]);
+        const formats = buildDivisionMap(DEFAULT_TOURNAMENT_FORMAT);
+        const competitionFormats = buildDivisionMap('doubles');
+        for (const row of settingsRows) {
+          formats[row.division] = row.tournament_format || DEFAULT_TOURNAMENT_FORMAT;
+          competitionFormats[row.division] = row.competition_format || 'doubles';
+        }
+        if (cancelled) return;
+        setDivisionTournamentFormats(formats);
+        setDivisionCompetitionFormats(competitionFormats);
         setSetupOptions(setup);
-        const defaultCount = setup.defaultGroupCount ?? null;
-        setSelectedGroupCount((prev) => {
-          if (prev && setup.validGroupCounts?.includes(prev)) return prev;
-          return defaultCount;
-        });
+        const defaultCount = setup?.defaultGroupCount ?? null;
+        setSelectedGroupCount(defaultCount);
+        setSelectedRound(
+          isTierPyramidFormat(formats[selectedDivision] || setup?.format) ? 'Level 1' : 'Qualifying'
+        );
+
+        if (isTierPyramidFormat(formats[selectedDivision] || setup?.format)) {
+          const tierData = await getPyramidTiers(selectedDivision);
+          if (!cancelled) {
+            setPyramidTierState(tierData);
+            const map = {};
+            for (const team of tierData?.teams || []) {
+              if (team.tier != null) map[team.id] = team.tier;
+            }
+            setTierAssignments(map);
+          }
+        } else {
+          setPyramidTierState(null);
+          setTierAssignments({});
+        }
       } catch {
-        setSetupOptions(null);
+        if (!cancelled) {
+          setSetupOptions(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setSetupLoading(false);
+        }
       }
     };
-    loadSetup();
-  }, [selectedLeague, teams]);
 
-  const loadData = async () => {
+    loadSetup();
+    setError(null);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDivision, timeSlotConfig, courtConfig]);
+
+  const loadProgressionLog = async (division = selectedDivision) => {
+    if (!isTierPyramidFormat(divisionTournamentFormats[division])) return;
+    try {
+      setLogLoading(true);
+      const data = await getPyramidProgressionLog(division);
+      setProgressionLog(Array.isArray(data) ? data : []);
+    } catch {
+      setProgressionLog([]);
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isTierPyramid && level1Matches.length > 0) {
+      loadProgressionLog(selectedDivision);
+    } else {
+      setProgressionLog([]);
+    }
+  }, [selectedDivision, isTierPyramid, level1Matches.length]);
+
+  const selectedDivisionLabel =
+    DIVISIONS.find((l) => l.value === selectedDivision)?.label || selectedDivision;
+
+  const setupReadyForDivision =
+    setupOptions?.division === selectedDivision && !setupLoading;
+
+  const closeScheduleWizard = () => setScheduleWizard(null);
+
+  const openGroupStageWizard = () => {
+    if (!setupReadyForDivision) {
+      setError(`Loading tournament setup for ${selectedDivisionLabel}…`);
+      return;
+    }
+    if (!setupOptions?.isValid) {
+      setError(setupOptions?.rejectionReason || setupOptions?.errors?.[0] || 'Cannot generate schedule with current team count.');
+      return;
+    }
+    if (setupOptions.division !== selectedDivision) {
+      setError(`Tournament setup is out of date for ${selectedDivisionLabel}. Please wait a moment and try again.`);
+      return;
+    }
+
+    if (isTierPyramid && !pyramidTierState?.isComplete) {
+      setError('Assign tiers to all entrants before generating the Tier Pyramid schedule.');
+      return;
+    }
+
+    const groupCount = selectedGroupCount ?? setupOptions.defaultGroupCount;
+    const matchCount = isTierPyramid
+      ? setupOptions.matchCounts?.level1Total
+      : groupCount &&
+      (groupCount *
+        ((setupOptions.teamCount / groupCount) * (setupOptions.teamCount / groupCount - 1))) /
+      2;
+
+    setError(null);
+    setScheduleWizard({
+      mode: 'group-stage',
+      title: isTierPyramid
+        ? `Create ${selectedDivisionLabel} Tier Pyramid Level 1 schedule`
+        : `Create ${selectedDivisionLabel} group stage schedule`,
+      groupCount,
+      matchCount,
+      existingQualifyingCount: isTierPyramid
+        ? level1Matches.length
+        : divisionMatches.filter((m) => m.round_type === 'Qualifying').length,
+      teamCount: setupOptions.teamCount,
+      isTierPyramid,
+    });
+  };
+
+  const handleWizardSubmit = async (payload) => {
+    if (!scheduleWizard) return;
+
+    const { timeSlotConfig: configuredTimeSlots, courtConfig: configuredCourts, startDate, endDate, venue, replaceExisting } = payload;
+
+    setTimeSlotConfig(configuredTimeSlots);
+    setCourtConfig(configuredCourts);
+    saveTimeSlotConfig(configuredTimeSlots);
+    saveCourtConfig(configuredCourts);
+
+    if (scheduleWizard.mode === 'group-stage') {
+      setGenerating(true);
+      try {
+        const schedule = await generateMatchSchedule(startDate, endDate, venue, selectedDivision, {
+          format: scheduleWizard.isTierPyramid ? 'tier-pyramid' : 'groups',
+          groupCount: selectedGroupCount ?? setupOptions.defaultGroupCount,
+          replaceExisting,
+          timeSlotConfig: configuredTimeSlots,
+          courtConfig: configuredCourts,
+        });
+
+        if (!schedule.matches?.length) {
+          throw new Error('No matches were created for this division.');
+        }
+
+        if (schedule.division && schedule.division !== selectedDivision) {
+          throw new Error(`Schedule was created for ${schedule.division} instead of ${selectedDivisionLabel}.`);
+        }
+
+        await loadData(selectedDivision);
+
+        let message = scheduleWizard.isTierPyramid
+          ? `${selectedDivisionLabel}: ${schedule.matches.length} Level 1 matches created (S1 + S2). Later levels auto-generate as you enter results.`
+          : `${selectedDivisionLabel}: ${schedule.matches.length} qualifying matches created.`;
+        if (schedule.expectedMatchCount && schedule.matches.length !== schedule.expectedMatchCount) {
+          message += ` Expected ${schedule.expectedMatchCount} matches.`;
+        }
+        if (endDate) {
+          message += ` Date range: ${startDate} to ${endDate}.`;
+        } else {
+          message += ` Starting from ${startDate}.`;
+        }
+
+        await showSuccess('Schedule created', message);
+        closeScheduleWizard();
+      } catch (err) {
+        throw new Error(err.message || 'Failed to generate schedule');
+      } finally {
+        setGenerating(false);
+      }
+      return;
+    }
+
+    const knockoutHandlers = {
+      'knockout-qf': { fn: generateQuarterFinals, setLoading: setGeneratingQF, label: firstKnockoutLabel.replace('🏆 ', '') },
+      'knockout-sf': { fn: generateSemiFinals, setLoading: setGeneratingSF, label: 'Semi Finals' },
+      'knockout-final': { fn: generateFinal, setLoading: setGeneratingFinal, label: 'Final' },
+    };
+
+    const handler = knockoutHandlers[scheduleWizard.mode];
+    if (!handler) return;
+
+    handler.setLoading(true);
+    try {
+      const result = await handler.fn(
+        startDate,
+        venue,
+        selectedDivision,
+        configuredTimeSlots,
+        configuredCourts
+      );
+      await loadData();
+      const matchesCreated = result?.data?.matches?.length || result?.matches?.length || 0;
+      await showSuccess('Knockout scheduled', result?.message || `${handler.label} generated! ${matchesCreated} match(es) created.`);
+      closeScheduleWizard();
+    } catch (err) {
+      throw new Error(err.response?.data?.message || err.message || `Failed to generate ${handler.label}`);
+    } finally {
+      handler.setLoading(false);
+    }
+  };
+
+  const loadData = async (division = selectedDivision) => {
     try {
       setLoading(true);
       setError(null);
       const [matchesData, teamsData] = await Promise.all([
-        getMatches(),
-        getTeams()
+        getMatches(division),
+        getTeams(division),
       ]);
       setMatches(matchesData);
       setTeams(teamsData);
@@ -98,134 +398,52 @@ const MatchesPage = () => {
   };
 
 
-  // Generate match schedule
-  const handleGenerateSchedule = async () => {
-    if (!setupOptions?.isValid) {
-      setError(setupOptions?.rejectionReason || 'Cannot generate schedule with current team count.');
-      return;
-    }
-
-    const groupCount = selectedGroupCount ?? setupOptions.defaultGroupCount;
-    const matchCount =
-      groupCount &&
-      (groupCount *
-        ((setupOptions.teamCount / groupCount) * (setupOptions.teamCount / groupCount - 1))) /
-        2;
-
-    const startDate = prompt('Enter start date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-    if (!startDate) return;
-
-    let suggestedEnd = null;
-    try {
-      const hint = await getTournamentSetup(selectedLeague, { startDate, groupCount });
-      suggestedEnd = hint.scheduling?.suggestedEndDate ?? null;
-    } catch {
-      // continue without hint
-    }
-
-    const endPrompt =
-      matchCount > 0
-        ? `Enter end date (YYYY-MM-DD).\n\n${matchCount} matches need ${matchCount} weekday evening slots (6 per day, Mon–Fri).\nSuggested minimum end date: ${suggestedEnd || 'n/a'}\n\nLeave empty for no end date:`
-        : 'Enter end date (YYYY-MM-DD) - Leave empty for no end date:';
-
-    const endDateInput = prompt(endPrompt, suggestedEnd || '');
-    const endDate = endDateInput && endDateInput.trim() !== '' ? endDateInput.trim() : null;
-
-    if (endDate && new Date(endDate) < new Date(startDate)) {
-      setError('End date must be on or after start date');
-      return;
-    }
-
-    const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
-
-    const existingQualifying = leagueMatches.filter((m) => m.round_type === 'Qualifying');
-    const replaceExisting = existingQualifying.length > 0
-      ? window.confirm(
-          `${existingQualifying.length} qualifying match(es) already exist for ${selectedLeague} league. ` +
-          `Replace them with a fresh schedule for all ${setupOptions.teamCount} teams?`
-        )
-      : false;
-
-    if (existingQualifying.length > 0 && !replaceExisting) {
-      return;
-    }
-
-    try {
-      setGenerating(true);
-      setError(null);
-
-      const schedule = await generateMatchSchedule(startDate, endDate, venue, selectedLeague, {
-        groupCount: selectedGroupCount ?? setupOptions.defaultGroupCount,
-        replaceExisting,
-      });
-
-      if (!schedule.matches?.length) {
-        throw new Error('No matches were returned from the schedule generator.');
-      }
-
-      await createMultipleMatches(schedule.matches);
-
-      await loadData();
-
-      let message = `Schedule generated! ${schedule.matches.length} qualifying matches created.`;
-      if (schedule.expectedMatchCount && schedule.matches.length !== schedule.expectedMatchCount) {
-        message += `\n\nWarning: expected ${schedule.expectedMatchCount} matches.`;
-      }
-      if (schedule.data?.dateRange?.totalDays) {
-        message += `\n\nDate range: ${startDate} to ${endDate} (${schedule.data.dateRange.totalDays} day(s))`;
-      } else if (endDate) {
-        message += `\n\nDate range: ${startDate} to ${endDate}`;
-      } else {
-        message += `\n\nStarting from: ${startDate}`;
-      }
-      if (schedule.data?.additionalMatch) {
-        message += `\n\n${schedule.data.additionalMatch.message}`;
-      }
-      if (schedule.data?.poolDifference > 1) {
-        message += `\n\nNote: Pools have been redistributed to ensure equal team counts (${schedule.data.poolA.length} teams in Pool A, ${schedule.data.poolB.length} teams in Pool B).`;
-      }
-      alert(message);
-    } catch (err) {
-      setError(err.message || 'Failed to generate schedule');
-      console.error('Error generating schedule:', err);
-    } finally {
-      setGenerating(false);
-    }
+  // Generate match schedule — opens wizard
+  const handleGenerateSchedule = () => {
+    openGroupStageWizard();
   };
 
-  // Filter matches by league and round
+  // Filter matches by division and round
   const filteredMatches = selectedRound === 'all'
-    ? leagueMatches
-    : leagueMatches.filter(m => m.round_type === selectedRound);
+    ? divisionMatches
+    : isTierPyramid
+      ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
+      : divisionMatches.filter((m) => m.round_type === selectedRound);
 
-  const groupPools = [
-    ...new Set(
-      leagueMatches
-        .filter((m) => m.round_type === 'Qualifying' && m.pool)
-        .map((m) => m.pool)
-    ),
-  ].sort();
-  const qualifyingMatchesByPool = groupPools.reduce((acc, pool) => {
-    acc[pool] = filteredMatches.filter(m => m.round_type === 'Qualifying' && m.pool === pool);
-    return acc;
-  }, {});
+  const level1S2Matches = divisionMatches.filter((m) => m.round_type === 'S2');
+  const level1Summary = summarizeLevel1Schedule(level1Matches, setupOptions?.matchCounts || {});
+  const s2RoundGroups = groupMatchesByRoundRobinRounds(level1S2Matches);
 
-  const qualifyingCount = leagueMatches.filter((m) => m.round_type === 'Qualifying').length;
+  const qualifyingCount = divisionMatches.filter((m) => m.round_type === 'Qualifying').length;
   const activeGroupCount = selectedGroupCount ?? setupOptions?.defaultGroupCount;
   const expectedQualifyingMatches =
     setupOptions?.isValid && activeGroupCount
       ? activeGroupCount *
-        (((leagueTeams.length / activeGroupCount) * (leagueTeams.length / activeGroupCount - 1)) / 2)
+      (((divisionTeams.length / activeGroupCount) * (divisionTeams.length / activeGroupCount - 1)) / 2)
       : null;
   const scheduleMismatch =
+    !isTierPyramid &&
     expectedQualifyingMatches != null &&
     qualifyingCount > 0 &&
     qualifyingCount !== expectedQualifyingMatches;
 
-  // Handle update result
+  // Handle update result (admin only)
   const handleUpdateResult = (match) => {
     setSelectedMatch(match);
+    setShowMatchDetail(false);
     setShowResultForm(true);
+  };
+
+  const handleViewMatch = (match) => {
+    setSelectedMatch(match);
+    setShowResultForm(false);
+    setShowMatchDetail(true);
+  };
+
+  const closeMatchModal = () => {
+    setShowResultForm(false);
+    setShowMatchDetail(false);
+    setSelectedMatch(null);
   };
 
   // Handle winner change (for future use - standings update after save)
@@ -236,8 +454,8 @@ const MatchesPage = () => {
   };
 
   // Generate Quarter Finals
-  const handleGenerateQuarterFinals = async () => {
-    const qualifyingMatches = leagueMatches.filter(m => m.round_type === 'Qualifying');
+  const handleGenerateQuarterFinals = () => {
+    const qualifyingMatches = divisionMatches.filter(m => m.round_type === 'Qualifying');
     const completedQualifying = qualifyingMatches.filter(m => m.status === 'Completed');
 
     if (qualifyingMatches.length === 0) {
@@ -250,43 +468,22 @@ const MatchesPage = () => {
       return;
     }
 
-    const existingQF = leagueMatches.filter(m => m.round_type === 'Quarter Final');
+    const existingQF = divisionMatches.filter(m => m.round_type === 'Quarter Final');
     if (existingQF.length > 0) {
       setError('Quarter Finals already generated. Delete existing Quarter Final matches to regenerate.');
       return;
     }
 
-    const startDate = prompt('Enter start date for Quarter Finals (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-    if (!startDate) return;
-
-    const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
-
-    try {
-      setGeneratingQF(true);
-      setError(null);
-
-      const result = await generateQuarterFinals(startDate, venue, selectedLeague);
-      console.log('Quarter Finals generation result:', result);
-
-      // Reload matches
-      await loadData();
-
-      // Handle response structure - API interceptor returns response.data
-      // Backend sends: { success: true, data: { matches: [...] } }
-      // Interceptor returns: response.data = { success: true, data: { matches: [...] } }
-      const matchesCreated = result?.data?.matches?.length || result?.matches?.length || 0;
-      alert(`Quarter Finals generated! ${matchesCreated} matches created.`);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to generate Quarter Finals');
-      console.error('Error generating Quarter Finals:', err);
-    } finally {
-      setGeneratingQF(false);
-    }
+    setError(null);
+    setScheduleWizard({
+      mode: 'knockout-qf',
+      title: `Schedule ${firstKnockoutLabel.replace('🏆 ', '')}`,
+    });
   };
 
   // Generate Semi Finals
-  const handleGenerateSemiFinals = async () => {
-    const quarterFinals = leagueMatches.filter(m => m.round_type === 'Quarter Final');
+  const handleGenerateSemiFinals = () => {
+    const quarterFinals = divisionMatches.filter(m => m.round_type === 'Quarter Final');
     const completedQF = quarterFinals.filter(m => m.status === 'Completed');
 
     if (quarterFinals.length === 0) {
@@ -299,39 +496,21 @@ const MatchesPage = () => {
       return;
     }
 
-    const existingSF = leagueMatches.filter(m => m.round_type === 'Semi Final');
+    const existingSF = divisionMatches.filter(m => m.round_type === 'Semi Final');
     if (existingSF.length > 0) {
       setError('Semi Finals already generated. Delete existing Semi Final matches to regenerate.');
       return;
     }
 
-    const startDate = prompt('Enter start date for Semi Finals (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-    if (!startDate) return;
-
-    const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
-
-    try {
-      setGeneratingSF(true);
-      setError(null);
-
-      const result = await generateSemiFinals(startDate, venue, selectedLeague);
-
-      // Reload matches
-      await loadData();
-
-      // Handle response structure - API interceptor returns response.data
-      const matchesCreated = result?.data?.matches?.length || result?.matches?.length || 0;
-      alert(`Semi Finals generated! ${matchesCreated} matches created.`);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to generate Semi Finals');
-      console.error('Error generating Semi Finals:', err);
-    } finally {
-      setGeneratingSF(false);
-    }
+    setError(null);
+    setScheduleWizard({
+      mode: 'knockout-sf',
+      title: 'Schedule Semi Finals',
+    });
   };
 
   // Generate Final
-  const handleGenerateFinal = async () => {
+  const handleGenerateFinal = () => {
     if (!canGenerateFinal) {
       if (skipsSemiFinals) {
         setError('Complete both Quarter Final matches before generating the Final.');
@@ -341,33 +520,17 @@ const MatchesPage = () => {
       return;
     }
 
-    const existingFinal = leagueMatches.filter(m => m.round_type === 'Final');
+    const existingFinal = divisionMatches.filter(m => m.round_type === 'Final');
     if (existingFinal.length > 0) {
       setError('Final already generated. Delete existing Final match to regenerate.');
       return;
     }
 
-    const startDate = prompt('Enter start date for Final (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-    if (!startDate) return;
-
-    const venue = prompt('Enter venue name:', 'Main Court') || 'Main Court';
-
-    try {
-      setGeneratingFinal(true);
-      setError(null);
-
-      const result = await generateFinal(startDate, venue, selectedLeague);
-
-      // Reload matches
-      await loadData();
-
-      alert(`Final generated! The championship match is ready.`);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to generate Final');
-      console.error('Error generating Final:', err);
-    } finally {
-      setGeneratingFinal(false);
-    }
+    setError(null);
+    setScheduleWizard({
+      mode: 'knockout-final',
+      title: 'Schedule Final',
+    });
   };
 
   const handleSaveResult = async (resultData) => {
@@ -384,8 +547,8 @@ const MatchesPage = () => {
 
       // Reload matches to show updated results
       const [matchesData, teamsData] = await Promise.all([
-        getMatches(),
-        getTeams()
+        getMatches(selectedDivision),
+        getTeams(selectedDivision),
       ]);
 
       // Update matches and teams state
@@ -400,64 +563,411 @@ const MatchesPage = () => {
     }
   };
 
-  const rounds = [
-    { value: 'Qualifying', label: 'Qualifying Round' },
-    { value: 'Quarter Final', label: 'Quarter Finals' },
-    { value: 'Semi Final', label: 'Semi Finals' },
-    { value: 'Final', label: 'Final' },
-    { value: 'Third Place', label: 'Third Place' }
-  ];
+  const matchesForRound = (roundType) =>
+    isTierPyramid
+      ? filterMatchesForPyramidRound(divisionMatches, roundType)
+      : roundType === 'Level 1'
+        ? divisionMatches.filter((match) => match.round_type === 'S1' || match.round_type === 'S2')
+        : divisionMatches.filter((match) => match.round_type === roundType);
+
+  const pendingCountForRound = (roundType) =>
+    matchesForRound(roundType).filter(
+      (match) => match.status !== 'Completed' && match.team1_id && match.team2_id
+    ).length;
+
+  const handleAutoFillResults = async (roundType, roundLabel) => {
+    const pendingCount = pendingCountForRound(roundType);
+    if (pendingCount === 0) {
+      setError(`No pending ${roundLabel} matches to fill.`);
+      return;
+    }
+
+    const confirmed = await showConfirm({
+      title: `Auto-fill ${roundLabel} results?`,
+      text:
+        `This will complete ${pendingCount} match(es) with valid scores for testing. ` +
+        'The team with the lower ID wins each match so outcomes are predictable. ' +
+        'You can review every result on the match cards afterward.',
+      confirmText: 'Auto-fill',
+      variant: 'primary',
+    });
+    if (!confirmed) return;
+
+    try {
+      setAutoFillingRound(roundType);
+      setAutoFillingLabel(roundLabel);
+      setError(null);
+      const response = await autoFillMatchResults(selectedDivision, {
+        roundType,
+        setConfig,
+        gamePointsPerSet: setConfig.gamePointsPerSet,
+      });
+
+      await loadData(selectedDivision);
+      if (isTierPyramid && level1Matches.length > 0) {
+        await loadProgressionLog(selectedDivision);
+      }
+
+      const filled = response?.data?.filled ?? 0;
+      const progression = response?.data?.progressionActions ?? [];
+      let message = response?.message || `Auto-filled ${filled} match result(s).`;
+      if (progression.length > 0) {
+        message += ` ${progression.join(' · ')}`;
+      }
+      await showSuccess('Results auto-filled', message);
+    } catch (err) {
+      setError(err.message || 'Failed to auto-fill match results');
+    } finally {
+      setAutoFillingRound(null);
+      setAutoFillingLabel('');
+    }
+  };
+
+  const renderLevelAutoFillButton = (roundType, roundLabel) => {
+    if (!isAdmin || matchesForRound(roundType).length === 0) return null;
+
+    const pending = pendingCountForRound(roundType);
+    const isFilling = autoFillingRound === roundType;
+
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={isFilling || pending === 0 || autoFillingRound != null}
+        onClick={() => handleAutoFillResults(roundType, roundLabel)}
+        title="Testing only: lower team ID wins each match"
+      >
+        {isFilling ? 'Auto-filling…' : `Auto-fill ${roundLabel}`}
+      </Button>
+    );
+  };
+
+  const allRoundTabs = isTierPyramid ? PYRAMID_ROUND_TABS : KNOCKOUT_ROUND_TABS;
+
+  const visibleRoundTabs = useMemo(
+    () =>
+      allRoundTabs.filter((round) =>
+        roundHasMatches(divisionMatches, round.value, isTierPyramid)
+      ),
+    [allRoundTabs, divisionMatches, isTierPyramid]
+  );
+
+  useEffect(() => {
+    if (visibleRoundTabs.length === 0) return;
+    if (!visibleRoundTabs.some((round) => round.value === selectedRound)) {
+      setSelectedRound(visibleRoundTabs[0].value);
+    }
+  }, [visibleRoundTabs, selectedRound]);
+
+  const editableRounds = isTierPyramid ? TIER_PYRAMID_SET_ROUNDS : GROUP_STAGE_SET_ROUNDS;
+
+  const handleTierChange = (teamId, tier) => {
+    setTierAssignments((prev) => ({ ...prev, [teamId]: tier }));
+  };
+
+  const handleEntrantNameChange = async (teamId, teamName) => {
+    try {
+      setEntrantNameSavingId(teamId);
+      setError(null);
+      await updateTeam(teamId, { team_name: teamName });
+      setTeams((prev) =>
+        prev.map((team) => (team.id === teamId ? { ...team, team_name: teamName } : team))
+      );
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to update entrant name');
+    } finally {
+      setEntrantNameSavingId(null);
+    }
+  };
+
+  const handleSaveTiers = async () => {
+    try {
+      setTierSaving(true);
+      setError(null);
+      const assignments = Object.entries(tierAssignments).map(([teamId, tier]) => ({
+        teamId: Number(teamId),
+        tier: Number(tier),
+      }));
+      const data = await assignPyramidTiers(selectedDivision, assignments);
+      setPyramidTierState(data);
+      await showSuccess('Tiers saved', `${selectedDivisionLabel} tier assignments updated.`);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to save tier assignments');
+    } finally {
+      setTierSaving(false);
+    }
+  };
+
+  const handleOverrideAdvancement = async ({ updates, notes }) => {
+    try {
+      setPyramidAdminSaving(true);
+      setError(null);
+      await overridePyramidAdvancement(selectedDivision, updates, notes);
+      await loadData(selectedDivision);
+      await loadProgressionLog(selectedDivision);
+      const tierData = await getPyramidTiers(selectedDivision);
+      setPyramidTierState(tierData);
+      await showSuccess('Override applied', 'Team advancement updated.');
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to override advancement');
+    } finally {
+      setPyramidAdminSaving(false);
+    }
+  };
+
+  const handleRegenerateStage = async (fromStage) => {
+    try {
+      setPyramidAdminSaving(true);
+      setError(null);
+      const result = await regeneratePyramidStage(selectedDivision, fromStage);
+      await loadData(selectedDivision);
+      await loadProgressionLog(selectedDivision);
+      const tierData = await getPyramidTiers(selectedDivision);
+      setPyramidTierState(tierData);
+      const actions = result?.progression?.actions || [];
+      await showSuccess(
+        'Stage regenerated',
+        actions.length > 0 ? actions.join(' · ') : `Downstream progression re-run from ${fromStage}.`
+      );
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to regenerate stage');
+    } finally {
+      setPyramidAdminSaving(false);
+    }
+  };
+
+  const groupPools = isTierPyramid
+    ? [...new Set(level1Matches.filter((m) => m.round_type === 'S1' && m.pool).map((m) => m.pool))].sort()
+    : [
+      ...new Set(
+        divisionMatches
+          .filter((m) => m.round_type === 'Qualifying' && m.pool)
+          .map((m) => m.pool)
+      ),
+    ].sort();
+  const qualifyingMatchesByPool = groupPools.reduce((acc, pool) => {
+    acc[pool] = filteredMatches.filter((m) =>
+      isTierPyramid ? m.round_type === 'S1' && m.pool === pool : m.round_type === 'Qualifying' && m.pool === pool
+    );
+    return acc;
+  }, {});
+
+  const handleSetConfigChange = (roundType, value) => {
+    setSetConfig((prev) => ({
+      ...prev,
+      sets: {
+        ...(prev.sets || {}),
+        [roundType]: value,
+      },
+    }));
+  };
+
+  const handleGamePointsChange = (value) => {
+    setSetConfig((prev) => ({
+      ...prev,
+      gamePointsPerSet: Number(value) === 21 ? 21 : 11,
+    }));
+  };
+
+  const handleSaveSetConfig = () => {
+    const sanitized = saveMatchSetConfig(setConfig);
+    setSetConfig(sanitized);
+  };
+
+  const handleResetSetConfig = () => {
+    setSetConfig(resetMatchSetConfig());
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {autoFillingRound && (
+        <LoadingOverlay
+          message={`Auto-filling ${autoFillingLabel} results…`}
+          submessage="Please wait while match scores are generated."
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Matches</h2>
           <p className="text-gray-600 mt-1">
-            Tournament match schedule and results
+            {isAdmin
+              ? 'Schedule and score matches per division - each division has its own tournament flow'
+              : 'Browse schedules and results per division — read-only view'}
           </p>
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+          <div>
+            <h3 className="font-semibold text-gray-900">Match configuration</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Configure sets per round and game length (11 or 21 points). Saved in this browser for
+              scoring and tie-break rules.
+            </p>
+          </div>
+
+          <label className="block text-sm text-gray-700 max-w-xs">
+            <span className="block mb-1">Points per game</span>
+            <select
+              value={setConfig.gamePointsPerSet ?? 11}
+              onChange={(e) => handleGamePointsChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              {GAME_POINT_OPTIONS.map((points) => (
+                <option key={points} value={points}>
+                  {points}-point games
+                  {points === 11 ? ' (6-0 knockout)' : ' (7-0 / 11-1 knockout)'}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {editableRounds.map((roundType) => (
+              <label key={roundType} className="text-sm text-gray-700">
+                <span className="block mb-1">{getMatchSetRoundLabel(roundType)}</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="2"
+                  value={setConfig.sets?.[roundType] ?? ''}
+                  onChange={(e) => handleSetConfigChange(roundType, e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500">
+            Even set counts are adjusted to the next odd value when saved. Knockout margins:
+            11-point games treat 6-0 as decisive; 21-point games treat 7-0 and 11-1 as decisive.
+            Defaults: Qualifying 1, QF 3, SF 5, Third Place 5, Final 9; pyramid Level 1 3, L2 5, L3 7, Third Place 5, Final 9.
+          </p>
+          <div className="flex gap-2 flex-row-reverse">
+            <Button type="button" size="sm" onClick={handleSaveSetConfig}>
+              Save set config
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={handleResetSetConfig}>
+              Reset defaults
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <DivisionTabs
+        selected={selectedDivision}
+        onChange={setSelectedDivision}
+        counts={Object.fromEntries(
+          DIVISIONS.map((d) => [d.value, teams.filter((t) => getDivision(t) === d.value).length])
+        )}
+      />
+
+      {divisionTeams.length === 0 && !loading && isAdmin && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-900">
+          No teams in {selectedDivisionLabel}. Generate teams on the Teams page for this division first.
+        </div>
+      )}
 
       {scheduleMismatch && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
           <p className="font-medium">Schedule does not match your team count</p>
           <p className="mt-1">
-            {leagueTeams.length} teams in {selectedLeague} league need{' '}
+            {divisionTeams.length} teams in {selectedDivisionLabel} need{' '}
             <strong>{expectedQualifyingMatches}</strong> qualifying matches ({activeGroupCount} groups), but only{' '}
             <strong>{qualifyingCount}</strong> are scheduled. Regenerate the group stage to include every team.
           </p>
         </div>
       )}
 
-      {isAdmin && (qualifyingCount === 0 || scheduleMismatch) && (
-        <TournamentSetupPanel
-          setupOptions={setupOptions}
-          selectedGroupCount={selectedGroupCount}
-          onGroupCountChange={setSelectedGroupCount}
-          onGenerate={handleGenerateSchedule}
-          generating={generating}
-          isAdmin={isAdmin}
-        />
-      )}
+      <div className="grid grid-cols-2 gap-3">
+        {isAdmin && (
+          <>
+            {isTierPyramid ? (
+              <>
+                {divisionTeams.length > 0 && (
+                  <TierAssignmentPanel
+                    teams={divisionTeams}
+                    tierRequirements={
+                      setupOptions?.tierRequirements || {
+                        tier1: pyramidTierState?.config?.tier1Count,
+                        tier2: pyramidTierState?.config?.tier2Count,
+                        tier3: pyramidTierState?.config?.tier3Count,
+                      }
+                    }
+                    assignments={tierAssignments}
+                    onTierChange={handleTierChange}
+                    onSave={handleSaveTiers}
+                    saving={tierSaving}
+                    isComplete={pyramidTierState?.isComplete}
+                    errors={pyramidTierState?.errors || []}
+                    isAdmin={isAdmin}
+                    divisionLabel={selectedDivisionLabel}
+                    isSingles={isSinglesDivision}
+                    onTeamNameChange={handleEntrantNameChange}
+                    nameSavingId={entrantNameSavingId}
+                  />
+                )}
 
-      {/* League Selector */}
-      <div className="flex gap-2 flex-wrap">
-        {LEAGUES.map(league => (
-          <Button
-            key={league.value}
-            onClick={() => setSelectedLeague(league.value)}
-            variant={selectedLeague === league.value ? 'primary' : 'outline'}
-            size="sm"
-          >
-            {league.label}
-          </Button>
-        ))}
+                {level1Matches.length > 0 && (
+                  <PyramidAdminPanel
+                    teams={pyramidAdminTeams}
+                    progressionLog={progressionLog}
+                    logLoading={logLoading}
+                    onOverrideAdvancement={handleOverrideAdvancement}
+                    onRegenerateStage={handleRegenerateStage}
+                    onRefreshLog={() => loadProgressionLog(selectedDivision)}
+                    divisionLabel={selectedDivisionLabel}
+                    tournamentStatus={pyramidStatus}
+                    saving={pyramidAdminSaving}
+                  />
+                )}
+
+                {divisionTeams.length > 0 && setupReadyForDivision && level1Matches.length === 0 && (
+                  <TierPyramidSetupPanel
+                    setupOptions={setupOptions}
+                    onGenerate={handleGenerateSchedule}
+                    generating={generating}
+                    isAdmin={isAdmin}
+                    divisionLabel={selectedDivisionLabel}
+                    tiersComplete={pyramidTierState?.isComplete}
+                    level1MatchCount={setupOptions?.matchCounts?.level1Total}
+                    timeSlotSummary={timeSlotSummary}
+                    courtSummary={courtSummary}
+                    matchesPerWeekday={matchesPerWeekday}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                {divisionTeams.length > 0 && setupReadyForDivision && (qualifyingCount === 0 || scheduleMismatch) && (
+                  <TournamentSetupPanel
+                    setupOptions={setupOptions}
+                    selectedGroupCount={selectedGroupCount}
+                    onGroupCountChange={setSelectedGroupCount}
+                    onGenerate={handleGenerateSchedule}
+                    generating={generating}
+                    isAdmin={isAdmin}
+                    divisionLabel={selectedDivisionLabel}
+                    timeSlotSummary={timeSlotSummary}
+                    courtSummary={courtSummary}
+                    matchesPerWeekday={matchesPerWeekday}
+                  />
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
 
+      {setupLoading && (
+        <div className="text-sm text-gray-500">Loading setup for {selectedDivisionLabel}…</div>
+      )}
+
       {/* Requirements */}
-      {setupOptions && !setupOptions.isValid && (
+      {setupOptions && setupReadyForDivision && !setupOptions.isValid && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">
             <strong>Note:</strong> {setupOptions.rejectionReason}
@@ -465,10 +975,10 @@ const MatchesPage = () => {
         </div>
       )}
 
-      {/* Round Filter */}
-      {leagueMatches.length > 0 && (
+      {/* Round Filter — only tabs with scheduled matches */}
+      {visibleRoundTabs.length > 0 && (
         <div className="flex gap-2 flex-wrap">
-          {rounds.map(round => (
+          {visibleRoundTabs.map((round) => (
             <Button
               key={round.value}
               onClick={() => setSelectedRound(round.value)}
@@ -481,37 +991,129 @@ const MatchesPage = () => {
         </div>
       )}
 
+      {isTierPyramid && level1Matches.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-900 space-y-1">
+          <p>
+            {isAdmin
+              ? ' Enter results to unlock Level 2+.'
+              : ' Later levels unlock as results are entered.'} <br />
+            <strong>Level 1</strong> runs S1 group matches (Tiers 2 - 3) and the Tier 1 round-robin in parallel.
+          </p>
+          <p>
+            Scheduled: <strong>{level1Summary.total}</strong>
+            {level1Summary.expectedTotal
+              ? ` / ${level1Summary.expectedTotal} expected`
+              : ''}{' '}
+            (S1: {level1Summary.s1}
+            {level1Summary.expectedS1 != null ? ` / ${level1Summary.expectedS1}` : ''}, tier 1 RR:{' '}
+            {level1Summary.s2}
+            {level1Summary.expectedS2 != null ? ` / ${level1Summary.expectedS2}` : ''})
+          </p>
+          {level1Summary.isIncomplete && (
+            <p className="text-amber-800 font-medium">
+              {isAdmin
+                ? 'Schedule looks incomplete — regenerate Level 1 with a wider date range if matches are missing.'
+                : 'The Level 1 schedule may still be incomplete.'}
+            </p>
+          )}
+        </div>
+      )}
 
-      {/* Generate Quarter Finals Button */}
-      {selectedRound === 'Qualifying' &&
-        leagueMatches.filter(m => m.round_type === 'Qualifying').length > 0 &&
-        leagueMatches.filter(m => m.round_type === 'Qualifying').every(m => m.status === 'Completed') &&
-        leagueMatches.filter(m => m.round_type === 'Quarter Final').length === 0 && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-green-800 font-medium">
-                  ✅ All qualifying matches completed!
-                </p>
-                <p className="text-green-600 text-sm mt-1">
-                  Top 2 teams from each group are ready. Generate Quarter Finals to proceed.
-                </p>
-              </div>
-              {isAdmin && (
-                <Button
-                  onClick={handleGenerateQuarterFinals}
-                  variant="primary"
-                  disabled={generatingQF}
-                >
-                  {generatingQF ? 'Generating...' : '🏆 Generate Quarter Finals'}
-                </Button>
-              )}
-            </div>
+      {!loading && isTierPyramid && level1Matches.length > 0 && selectedRound === 'Level 1' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-2xl font-bold text-gray-900">Level 1</h3>
+            {renderLevelAutoFillButton('Level 1', 'Level 1')}
           </div>
-        )}
 
-      {/* Generate Semi Finals Button (4-group knockout) */}
-      {selectedRound === 'Quarter Final' &&
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            {groupPools.length > 0 && (
+              <div className="space-y-4">
+                <h4 className="text-xl font-semibold text-gray-900">S1 - Groups (Tiers 2 - 3)</h4>
+                {groupPools.map((pool) =>
+                  qualifyingMatchesByPool[pool]?.length > 0 ? (
+                    <div key={pool}>
+                      <h4 className="text-lg font-semibold text-gray-800 mb-3">Group {pool}</h4>
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        {qualifyingMatchesByPool[pool].map((match) => (
+                          <MatchCard
+                            key={match.id}
+                            match={match}
+                            onUpdateResult={handleUpdateResult}
+                            onViewDetails={handleViewMatch}
+                            isAdmin={isAdmin}
+                            teamTiers={teamTierMap}
+                            setConfig={setConfig}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            )}
+
+            {s2RoundGroups.length > 0 && (
+              <div className="space-y-4">
+                <h4 className="text-xl font-semibold text-gray-900">S2 - Round-robin (Tier 1)</h4>
+                {s2RoundGroups.map((round) => (
+                  <div key={round.roundNumber}>
+                    <h4 className="text-lg font-semibold text-gray-800 mb-3">Round {round.roundNumber}</h4>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      {round.matches.map((match) => (
+                        <MatchCard
+                          key={match.id}
+                          match={match}
+                          onUpdateResult={handleUpdateResult}
+                          onViewDetails={handleViewMatch}
+                          isAdmin={isAdmin}
+                          teamTiers={teamTierMap}
+                          setConfig={setConfig}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Generate first knockout round (QF, SF, or Final depending on format) */}
+      {!isTierPyramid && selectedRound === 'Qualifying' && canGenerateFirstKnockout && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-800 font-medium">
+                ✅ All qualifying matches completed!
+              </p>
+              <p className="text-green-600 text-sm mt-1">
+                {isSingleGroup
+                  ? configuredTeamCount === 4
+                    ? 'Top 2 from the single group are ready for the Final.'
+                    : 'Top 4 from the single group are ready for Semi-finals.'
+                  : isAdmin
+                    ? 'Top 2 teams from each group are ready. Generate Quarter Finals to proceed.'
+                    : 'Top 2 teams from each group are ready — knockout rounds will be scheduled next.'}
+              </p>
+            </div>
+            {isAdmin && (
+              <Button
+                onClick={handleGenerateQuarterFinals}
+                variant="primary"
+                disabled={generatingQF}
+              >
+                {generatingQF ? 'Generating...' : firstKnockoutLabel}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Generate Semi Finals (multi-group only) */}
+      {!isTierPyramid && selectedRound === 'Quarter Final' &&
+        !skipsQuarterFinals &&
         quarterFinalMatches.length === 4 &&
         quarterFinalsComplete &&
         semiFinalMatches.length === 0 && (
@@ -522,7 +1124,9 @@ const MatchesPage = () => {
                   ✅ All Quarter Final matches completed!
                 </p>
                 <p className="text-green-600 text-sm mt-1">
-                  Top 4 teams are ready. Generate Semi Finals to proceed.
+                  {isAdmin
+                    ? 'Top 4 teams are ready. Generate Semi Finals to proceed.'
+                    : 'Top 4 teams are ready — Semi Finals will be scheduled next.'}
                 </p>
               </div>
               {isAdmin && (
@@ -539,7 +1143,7 @@ const MatchesPage = () => {
         )}
 
       {/* Generate Final (from Semi Finals or directly after 2 Quarter Finals) */}
-      {canGenerateFinal &&
+      {!isTierPyramid && canGenerateFinal &&
         (selectedRound === 'Semi Final' ||
           (selectedRound === 'Quarter Final' && skipsSemiFinals && quarterFinalMatches.length === 2)) && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -552,8 +1156,12 @@ const MatchesPage = () => {
                 </p>
                 <p className="text-green-600 text-sm mt-1">
                   {skipsSemiFinals && quarterFinalMatches.length === 2
-                    ? 'Top 2 teams are ready. Generate the Final (this league skips Semi Finals).'
-                    : 'Top 2 teams are ready. Generate Final to determine the champion.'}
+                    ? isAdmin
+                      ? 'Top 2 teams are ready. Generate the Final (this division skips Semi Finals).'
+                      : 'Top 2 teams are ready — the Final will be scheduled next (this division skips Semi Finals).'
+                    : isAdmin
+                      ? 'Top 2 teams are ready. Generate Final to determine the champion.'
+                      : 'Top 2 teams are ready — the Final will be scheduled next.'}
                 </p>
               </div>
               {isAdmin && (
@@ -572,7 +1180,7 @@ const MatchesPage = () => {
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          <strong>Error</strong>
+          <strong>Error:</strong> {error}
         </div>
       )}
 
@@ -584,19 +1192,25 @@ const MatchesPage = () => {
       )}
 
       {/* Matches Display */}
-      {!loading && leagueMatches.length === 0 && (
+      {!loading && divisionMatches.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <div className="text-6xl mb-4">🏓</div>
           <p className="text-gray-600 text-lg mb-2">No matches scheduled yet</p>
           <p className="text-gray-500 text-sm mb-6">
-            Click "Generate Schedule" to create the tournament schedule
+            {isAdmin
+              ? 'Click "Generate Schedule" to create the tournament schedule'
+              : 'Matches will appear here once the tournament schedule is published'}
           </p>
         </div>
       )}
 
-      {/* Qualifying Round - Show by Pool */}
-      {!loading && selectedRound === 'Qualifying' && (
+      {/* Group-stage qualifying — show by pool */}
+      {!loading && !isTierPyramid && selectedRound === 'Qualifying' && (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-2xl font-bold text-gray-900">Qualifying Round</h3>
+            {renderLevelAutoFillButton('Qualifying', 'Qualifying')}
+          </div>
           {groupPools.map((pool) =>
             qualifyingMatchesByPool[pool]?.length > 0 ? (
               <div key={pool}>
@@ -607,7 +1221,10 @@ const MatchesPage = () => {
                       key={match.id}
                       match={match}
                       onUpdateResult={handleUpdateResult}
+                      onViewDetails={handleViewMatch}
                       isAdmin={isAdmin}
+                      teamTiers={teamTierMap}
+                      setConfig={setConfig}
                     />
                   ))}
                 </div>
@@ -617,57 +1234,121 @@ const MatchesPage = () => {
         </div>
       )}
 
-      {/* Quarter Finals, Semi Finals, and Final - Show all matches */}
-      {!loading && ['Quarter Final', 'Semi Final', 'Final', 'Third Place'].includes(selectedRound) && filteredMatches.length > 0 && (
-        <div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-4">
-            {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
-            {selectedRound === 'Semi Final' && 'Semi Final Matches'}
-            {selectedRound === 'Final' && 'Final Match'}
-            {selectedRound === 'Third Place' && 'Third Place Match'}
-          </h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
-            {filteredMatches.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                onUpdateResult={handleUpdateResult}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* No matches for selected round */}
-      {!loading && ['Quarter Final', 'Semi Final', 'Final', 'Third Place'].includes(selectedRound) && filteredMatches.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <div className="text-6xl mb-4">🏓</div>
-          <p className="text-gray-600 text-lg mb-2">No {selectedRound.toLowerCase()} matches yet</p>
-          <p className="text-gray-500 text-sm">
-            {selectedRound === 'Quarter Final' && 'Complete all qualifying matches to generate Quarter Finals.'}
-            {selectedRound === 'Semi Final' && 'Complete all Quarter Final matches to generate Semi Finals.'}
-            {selectedRound === 'Final' && 'Complete all Semi Final matches to generate the Final.'}
-          </p>
-        </div>
-      )}
-
-      {/* Result Form Modal */}
-      {showResultForm && selectedMatch && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <MatchResultForm
-                match={selectedMatch}
-                onSubmit={handleSaveResult}
-                onCancel={() => {
-                  setShowResultForm(false);
-                  setSelectedMatch(null);
-                }}
-                onWinnerChange={handleWinnerChange}
-              />
+      {/* Knockout & pyramid rounds L2+ (flat list) */}
+      {!loading &&
+        !['Qualifying', 'Level 1'].includes(selectedRound) &&
+        filteredMatches.length > 0 && (
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h3 className="text-2xl font-bold text-gray-900">
+                {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
+                {selectedRound === 'Third Place' && 'Third Place Match'}
+                {selectedRound === 'Level 2' && 'Level 2 - Qualifying Matches'}
+                {selectedRound === 'Level 3' && 'Level 3 - Crossover Matches'}
+                {selectedRound === 'Semi Final' && 'Semi Final Matches'}
+                {selectedRound === 'Final' && 'Final Match'}
+              </h3>
+              {renderLevelAutoFillButton(selectedRound, selectedRound)}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
+              {filteredMatches.map((match) => (
+                <MatchCard
+                  key={match.id}
+                  match={match}
+                  onUpdateResult={handleUpdateResult}
+                  onViewDetails={handleViewMatch}
+                  isAdmin={isAdmin}
+                  teamTiers={teamTierMap}
+                  setConfig={setConfig}
+                />
+              ))}
             </div>
           </div>
-        </div>
+        )}
+
+      {/* No matches for selected round (should be rare once empty tabs are hidden) */}
+      {!loading &&
+        filteredMatches.length === 0 &&
+        divisionMatches.length > 0 &&
+        visibleRoundTabs.some((round) => round.value === selectedRound) && (
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <div className="text-6xl mb-4">🏓</div>
+            <p className="text-gray-600 text-lg mb-2">No {selectedRound} matches yet</p>
+            <p className="text-gray-500 text-sm">
+              {!isTierPyramid && selectedRound === 'Quarter Final' && 'Complete all qualifying matches to generate Quarter Finals.'}
+              {!isTierPyramid && selectedRound === 'Semi Final' && 'Complete all Quarter Final matches to generate Semi Finals.'}
+              {!isTierPyramid && selectedRound === 'Final' && 'Complete prior rounds to generate the Final.'}
+              {isTierPyramid && selectedRound === 'Semi Final' && 'Complete Level 3 to generate Semi Finals.'}
+              {isTierPyramid && selectedRound === 'Final' && 'Complete Semi Finals to generate the Final.'}
+              {isTierPyramid &&
+                !['Semi Final', 'Final'].includes(selectedRound) &&
+                'Complete earlier pyramid stages to unlock this round.'}
+            </p>
+          </div>
+        )}
+
+      <Modal
+        open={showResultForm && !!selectedMatch}
+        onClose={closeMatchModal}
+        title="Update Match"
+        footer={
+          selectedMatch && (
+            <div className="flex gap-3 flex-row-reverse">
+              <Button type="submit" form="match-result-form" variant="primary">
+                Save Changes
+              </Button>
+              <Button type="button" variant="outline" onClick={closeMatchModal}>
+                Cancel
+              </Button>
+            </div>
+          )
+        }
+      >
+        {selectedMatch && (
+          <MatchResultForm
+            embedded
+            formId="match-result-form"
+            match={selectedMatch}
+            onSubmit={handleSaveResult}
+            setConfig={setConfig}
+            onCancel={closeMatchModal}
+            onWinnerChange={handleWinnerChange}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={showMatchDetail && !!selectedMatch}
+        onClose={closeMatchModal}
+        title="Match details"
+        footer={
+          <div className="flex gap-3 flex-row-reverse">
+            <Button type="button" variant="outline" onClick={closeMatchModal}>
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {selectedMatch && (
+          <MatchDetailPanel match={selectedMatch} setConfig={setConfig} />
+        )}
+      </Modal>
+
+      {scheduleWizard && (
+        <ScheduleWizard
+          open
+          mode={scheduleWizard.mode === 'group-stage' ? 'group-stage' : 'knockout'}
+          title={scheduleWizard.title}
+          division={selectedDivision}
+          divisionLabel={selectedDivisionLabel}
+          groupCount={scheduleWizard.groupCount}
+          matchCount={scheduleWizard.matchCount}
+          existingQualifyingCount={scheduleWizard.existingQualifyingCount ?? 0}
+          teamCount={scheduleWizard.teamCount}
+          onCancel={closeScheduleWizard}
+          onSubmit={handleWizardSubmit}
+          submitting={generating || generatingQF || generatingSF || generatingFinal}
+        />
       )}
     </div>
   );

@@ -1,12 +1,56 @@
-import { useState } from 'react';
-import Input from '../../atoms/Input';
-import Select from '../../atoms/Select';
-import Button from '../../atoms/Button';
-import Card from '../../atoms/Card';
+import { useEffect, useMemo, useState } from 'react';
+import Input from '@/components/atoms/Input';
+import Button from '@/components/atoms/Button';
+import Card from '@/components/atoms/Card';
+import { getSetCountForRound, getGamePointsPerSet } from '@/config/matchSetConfig';
+import { parseSetGameScores } from '@shared/tournament/standings.js';
+import {
+  classifySetMargin,
+  getGamePointRules,
+  getSetMarginLabel,
+  getSetScoreValidationMessage,
+  normalizeGamePointsPerSet,
+  sanitizeIntegerInput,
+} from '@shared/tournament/gamePointRules.js';
+
+const parseInitialSetScores = (match) => {
+  const parsed = parseSetGameScores(match) || [];
+  const mapped = parsed.map((set) => ({
+    team1: String(set.team1),
+    team2: String(set.team2),
+  }));
+
+  const playedSets = (Number(match.score_team1) || 0) + (Number(match.score_team2) || 0);
+  if (playedSets <= mapped.length) {
+    return mapped.slice(0, playedSets);
+  }
+
+  return [
+    ...mapped,
+    ...Array.from({ length: playedSets - mapped.length }, () => ({ team1: '', team2: '' })),
+  ];
+};
+
+const marginLabel = (team1Points, team2Points, format) => {
+  const p1 = parseInt(team1Points, 10);
+  const p2 = parseInt(team2Points, 10);
+  if (!Number.isFinite(p1) || !Number.isFinite(p2) || p1 === p2) return null;
+  const winnerPoints = Math.max(p1, p2);
+  const loserPoints = Math.min(p1, p2);
+  const tier = classifySetMargin(winnerPoints, loserPoints, format);
+  return getSetMarginLabel(tier);
+};
 
 // Form component for updating match result
-const MatchResultForm = ({ match, onSubmit, onCancel, onWinnerChange }) => {
-  // Format date for datetime-local input (YYYY-MM-DDTHH:mm)
+const MatchResultForm = ({
+  match,
+  onSubmit,
+  onCancel,
+  onWinnerChange,
+  setConfig,
+  embedded = false,
+  formId,
+}) => {
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -18,6 +62,13 @@ const MatchResultForm = ({ match, onSubmit, onCancel, onWinnerChange }) => {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
+  const totalSets = getSetCountForRound(match.round_type, setConfig);
+  const setsNeededToWin = Math.floor(totalSets / 2) + 1;
+  const gamePointFormat = normalizeGamePointsPerSet(
+    match.game_point_format ?? getGamePointsPerSet(setConfig)
+  );
+  const gamePointRules = getGamePointRules(gamePointFormat);
+
   const [formData, setFormData] = useState({
     score_team1: match.score_team1 || 0,
     score_team2: match.score_team2 || 0,
@@ -25,144 +76,227 @@ const MatchResultForm = ({ match, onSubmit, onCancel, onWinnerChange }) => {
     is_abandoned: match.is_abandoned || false,
     abandoned_reason: match.abandoned_reason || '',
     scheduled_date: formatDateForInput(match.scheduled_date),
-    venue: match.venue || ''
+    venue: match.venue || '',
   });
-
+  const [setGameScores, setSetGameScores] = useState(parseInitialSetScores(match));
   const [errors, setErrors] = useState({});
+
+  const playedSetCount = useMemo(() => {
+    const score1 = parseInt(formData.score_team1, 10) || 0;
+    const score2 = parseInt(formData.score_team2, 10) || 0;
+    return score1 + score2;
+  }, [formData.score_team1, formData.score_team2]);
+
+  const syncSetRows = (count) => {
+    setSetGameScores((prev) => {
+      if (count === prev.length) return prev;
+      if (count > prev.length) {
+        return [
+          ...prev,
+          ...Array.from({ length: count - prev.length }, () => ({ team1: '', team2: '' })),
+        ];
+      }
+      return prev.slice(0, count);
+    });
+  };
+
+  useEffect(() => {
+    syncSetRows(playedSetCount);
+  }, [playedSetCount]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    // When winner is selected, automatically update scores
-    if (name === 'winner_team_id') {
-      if (value) {
-        const winnerId = parseInt(value);
-        // Winner gets score 1, loser gets score 0
-        if (winnerId === match.team1_id) {
-          setFormData(prev => ({
-            ...prev,
-            winner_team_id: value,
-            score_team1: 1,
-            score_team2: 0
-          }));
-        } else {
-          setFormData(prev => ({
-            ...prev,
-            winner_team_id: value,
-            score_team1: 0,
-            score_team2: 1
-          }));
-        }
-        // Notify parent component that winner changed (for real-time standings update)
-        if (onWinnerChange) {
-          onWinnerChange(winnerId);
-        }
-      } else {
-        // Clear winner, reset scores
-        setFormData(prev => ({
-          ...prev,
-          winner_team_id: '',
-          score_team1: 0,
-          score_team2: 0
-        }));
-        if (onWinnerChange) {
-          onWinnerChange(null);
-        }
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleSetWinChange = (e) => {
+    const { name, value } = e.target;
+    const sanitized = sanitizeIntegerInput(value, { min: 0, max: totalSets });
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: sanitized,
+    }));
+
+    if (errors.score) {
+      setErrors((prev) => ({ ...prev, score: '' }));
+    }
+  };
+
+  const handleSetScoreChange = (index, side, rawValue) => {
+    const sanitized = sanitizeIntegerInput(rawValue, {
+      min: 0,
+      max: gamePointRules.maxSetScore,
+    });
+
+    setSetGameScores((prev) => {
+      const next = [...prev];
+      while (next.length <= index) {
+        next.push({ team1: '', team2: '' });
       }
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : value
-      }));
+      next[index] = { ...next[index], [side]: sanitized };
+      return next;
+    });
+    if (errors.set_game_scores) {
+      setErrors((prev) => ({ ...prev, set_game_scores: '' }));
+    }
+  };
+
+  const validateSetGameScores = () => {
+    if (playedSetCount === 0) {
+      return { error: null, payload: null };
     }
 
-    // Clear errors
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+    const normalized = [];
+    let hasAny = false;
+
+    for (let i = 0; i < playedSetCount; i += 1) {
+      const row = setGameScores[i] || { team1: '', team2: '' };
+      const team1 = row.team1 === '' ? null : parseInt(row.team1, 10);
+      const team2 = row.team2 === '' ? null : parseInt(row.team2, 10);
+
+      if (team1 == null && team2 == null) continue;
+
+      hasAny = true;
+
+      if (team1 == null || team2 == null) {
+        return {
+          error: `Set ${i + 1}: enter both scores for this set.`,
+          payload: null,
+        };
+      }
+
+      const validationMessage = getSetScoreValidationMessage(team1, team2, gamePointFormat);
+      if (validationMessage) {
+        return {
+          error: `Set ${i + 1}: ${validationMessage}`,
+          payload: null,
+        };
+      }
+
+      normalized.push({ team1, team2 });
     }
+
+    if (hasAny && normalized.length !== playedSetCount) {
+      return {
+        error: `Enter game points for all ${playedSetCount} sets, or leave every set blank.`,
+        payload: null,
+      };
+    }
+
+    return { error: null, payload: hasAny ? normalized : null };
   };
 
   const validate = () => {
     const newErrors = {};
+    const score1 = parseInt(formData.score_team1, 10) || 0;
+    const score2 = parseInt(formData.score_team2, 10) || 0;
+    const totalPlayedSets = score1 + score2;
+    const hasWinnerFromScore =
+      (score1 >= setsNeededToWin && score1 > score2) ||
+      (score2 >= setsNeededToWin && score2 > score1);
 
     if (!formData.is_abandoned) {
-      // Winner must be selected to award points
-      if (!formData.winner_team_id) {
-        // Allow saving without winner if just updating date/venue
-        // Only require winner if user is trying to complete the match
-        const hasDateChange = formData.scheduled_date !== formatDateForInput(match.scheduled_date);
-        const hasVenueChange = formData.venue !== (match.venue || '');
-        const hasOtherChanges = hasDateChange || hasVenueChange;
-
-        // If only date/venue changed, allow it. Otherwise require winner for completion
-        if (!hasOtherChanges) {
-          // User might want to just update other info, so don't require winner
+      if (score1 < 0 || score2 < 0) {
+        newErrors.score = 'Set wins cannot be negative';
+      } else if (score1 > totalSets || score2 > totalSets) {
+        newErrors.score = `Set wins cannot exceed ${totalSets} in this round`;
+      } else if (totalPlayedSets > totalSets) {
+        newErrors.score = `Total played sets cannot exceed ${totalSets}`;
+      } else if ((score1 > 0 || score2 > 0) && !hasWinnerFromScore) {
+        newErrors.score = `Enter a valid completed score. One team must reach ${setsNeededToWin} sets.`;
+      } else if (hasWinnerFromScore) {
+        const { error: setScoreError } = validateSetGameScores();
+        if (setScoreError) {
+          newErrors.set_game_scores = setScoreError;
         }
       }
-    } else {
-      // If abandoned, require reason
-      if (!formData.abandoned_reason.trim()) {
-        newErrors.abandoned_reason = 'Abandoned reason is required';
-      }
+    } else if (!formData.abandoned_reason.trim()) {
+      newErrors.abandoned_reason = 'Abandoned reason is required';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  const buildSetGameScoresPayload = () => validateSetGameScores().payload;
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (validate()) {
-      // Convert datetime-local format to ISO string for backend
-      let formattedDate = formData.scheduled_date;
-      if (formData.scheduled_date) {
-        formattedDate = new Date(formData.scheduled_date).toISOString();
-      }
+    if (!validate()) return;
 
-      const score1 = parseInt(formData.score_team1) || 0;
-      const score2 = parseInt(formData.score_team2) || 0;
+    let formattedDate = formData.scheduled_date;
+    if (formData.scheduled_date) {
+      formattedDate = new Date(formData.scheduled_date).toISOString();
+    }
 
-      // Determine status and winner
-      let finalWinner = formData.winner_team_id || match.winner_team_id;
-      let finalStatus = match.status;
+    const score1 = parseInt(formData.score_team1, 10) || 0;
+    const score2 = parseInt(formData.score_team2, 10) || 0;
+    const team1Won = score1 >= setsNeededToWin && score1 > score2;
+    const team2Won = score2 >= setsNeededToWin && score2 > score1;
+    const derivedWinner = team1Won ? match.team1_id : team2Won ? match.team2_id : null;
 
-      if (formData.is_abandoned) {
-        // If abandoned, the other team gets 1 point
-        // Set winner to team that didn't abandon
-        finalWinner = match.team2_id;
-        finalStatus = 'Completed';
-      } else if (formData.winner_team_id) {
-        // If winner is selected, mark as completed
-        finalWinner = formData.winner_team_id;
-        finalStatus = 'Completed';
-      }
-      // If no winner selected, keep existing status (just updating date/venue)
-
+    if (formData.is_abandoned) {
       onSubmit({
         scheduled_date: formattedDate,
         venue: formData.venue,
-        score_team1: score1,
-        score_team2: score2,
-        winner_team_id: finalWinner,
-        status: finalStatus,
-        is_abandoned: formData.is_abandoned,
-        abandoned_reason: formData.abandoned_reason || null
+        score_team1: 0,
+        score_team2: 1,
+        set_game_scores: null,
+        game_point_format: gamePointFormat,
+        winner_team_id: match.team2_id,
+        status: 'Completed',
+        is_abandoned: true,
+        abandoned_reason: formData.abandoned_reason || null,
       });
+      return;
     }
+
+    let finalWinner = derivedWinner || match.winner_team_id;
+    let finalStatus = match.status;
+
+    if (derivedWinner) {
+      finalWinner = derivedWinner;
+      finalStatus = 'Completed';
+    }
+
+    if (onWinnerChange) {
+      onWinnerChange(finalWinner || null);
+    }
+
+    onSubmit({
+      scheduled_date: formattedDate,
+      venue: formData.venue,
+      score_team1: score1,
+      score_team2: score2,
+      set_game_scores: buildSetGameScoresPayload(),
+      game_point_format: gamePointFormat,
+      winner_team_id: finalWinner,
+      status: finalStatus,
+      is_abandoned: formData.is_abandoned,
+      abandoned_reason: formData.abandoned_reason || null,
+    });
   };
 
-  return (
-    <Card className="p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Update Match</h2>
-
+  const form = (
+    <>
       <div className="mb-4 p-3 bg-gray-50 rounded-lg">
         <p className="font-semibold text-gray-900">{match.team1_name} vs {match.team2_name}</p>
-        <p className="text-sm text-gray-600">{match.round_type} {match.pool && `- Pool ${match.pool}`}</p>
+        <p className="text-sm text-gray-600">
+          {match.round_type} {match.pool && `- Pool ${match.pool}`} - Best of {totalSets} sets ({gamePointFormat}-point games)
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        {/* Date & Time Editing */}
+      <form id={formId} onSubmit={handleSubmit}>
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -185,49 +319,87 @@ const MatchResultForm = ({ match, onSubmit, onCancel, onWinnerChange }) => {
           />
         </div>
 
-        {/* Winner Selection - This determines points, scores are auto-updated */}
         {!formData.is_abandoned && (
-          <div className="mb-4">
-            <Select
-              label="Winner (Select to award 2 points)"
-              name="winner_team_id"
-              value={formData.winner_team_id}
-              onChange={handleChange}
-              options={[
-                { value: match.team1_id, label: match.team1_name },
-                { value: match.team2_id, label: match.team2_name }
-              ]}
-              error={errors.winner_team_id}
-            />
-            {formData.winner_team_id && (
-              <p className="text-sm text-green-600 mt-1">
-                ✓ 2 points will be automatically awarded to {parseInt(formData.winner_team_id) === match.team1_id ? match.team1_name : match.team2_name}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Scores - Display only (auto-updated when winner is selected) */}
-        {formData.winner_team_id && !formData.is_abandoned && (
           <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm font-medium text-gray-700 mb-2">Scores (Auto-updated):</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">{match.team1_name}</label>
-                <div className="px-3 py-2 bg-white border border-gray-300 rounded-lg font-semibold">
-                  {formData.score_team1}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">{match.team2_name}</label>
-                <div className="px-3 py-2 bg-white border border-gray-300 rounded-lg font-semibold">
-                  {formData.score_team2}
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Scores are automatically set when winner is selected (Winner: 1, Loser: 0)
+            <p className="text-sm font-medium text-gray-700 mb-2">
+              Set Score (first to {setsNeededToWin})
             </p>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label={`${match.team1_name} sets won`}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                name="score_team1"
+                value={formData.score_team1}
+                onChange={handleSetWinChange}
+                placeholder="0"
+              />
+              <Input
+                label={`${match.team2_name} sets won`}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                name="score_team2"
+                value={formData.score_team2}
+                onChange={handleSetWinChange}
+                placeholder="0"
+              />
+            </div>
+            {errors.score && <p className="text-sm text-red-600 mt-2">{errors.score}</p>}
+            <p className="text-xs text-gray-500 mt-2">
+              Enter final set wins. One team must reach {setsNeededToWin} sets to complete the match.
+            </p>
+
+            {playedSetCount > 0 && (
+              <div className="mt-4 border-t border-gray-200 pt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Game points per set (optional — enter all {playedSetCount} sets or leave all blank)
+                </p>
+                <div className="space-y-3 border-b border-gray-300">
+                  {Array.from({ length: playedSetCount }, (_, index) => {
+                    const row = setGameScores[index] || { team1: '', team2: '' };
+                    const margin = marginLabel(row.team1, row.team2, gamePointFormat);
+                    return (
+                      <div key={index} className="grid grid-cols-[auto_1fr_1fr] gap-3 items-center pt-4 border-b border-gray-300 ">
+                        <span className="text-xs font-semibold text-gray-500 px-2 align-middle self-stretch border-e border-gray-300">Set {index + 1}</span>
+                        <Input
+                          label={match.team1_name}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={row.team1}
+                          onChange={(e) => handleSetScoreChange(index, 'team1', e.target.value)}
+                          placeholder="0"
+                        />
+                        <Input
+                          label={match.team2_name}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={row.team2}
+                          onChange={(e) => handleSetScoreChange(index, 'team2', e.target.value)}
+                          placeholder="0"
+                        />
+                        {margin && (
+                          <span className="col-span-3 text-xs text-gray-500 -mt-1">{margin}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {errors.set_game_scores && (
+                  <p className="text-sm text-red-600 mt-2">{errors.set_game_scores}</p>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Max {gamePointRules.maxSetScore} points per side.{' '} 
+                  <br /> {gamePointFormat === 21
+                    ? 'Deuce at 20-20 - enter final score (e.g. 21-19). Knockout: 7-0, 11-1.'
+                    : 'Deuce at 10-10 - enter final score (e.g. 11-9, 11-6). Knockout: 6-0.'}{' '}
+                  <br /> Counts toward NRR/GD tie-breaks.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -259,19 +431,31 @@ const MatchResultForm = ({ match, onSubmit, onCancel, onWinnerChange }) => {
           />
         )}
 
+        {!embedded && (
+          <div className="flex gap-3 flex-row-reverse">
+            <Button type="submit" variant="primary">
+              Save Changes
+            </Button>
 
-        <div className="flex gap-3 mt-6">
-          <Button type="submit" variant="primary">
-            Save Changes
-          </Button>
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        )}
       </form>
+    </>
+  );
+
+  if (embedded) {
+    return form;
+  }
+
+  return (
+    <Card className="p-6">
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">Update Match</h2>
+      {form}
     </Card>
   );
 };
 
 export default MatchResultForm;
-

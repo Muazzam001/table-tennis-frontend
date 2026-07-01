@@ -1,5 +1,5 @@
 // API service functions for statistics operations
-import api from '../utils/api.js';
+import api from '@/utils/api.js';
 
 // Get dashboard statistics (overview stats)
 export const getDashboardStats = async () => {

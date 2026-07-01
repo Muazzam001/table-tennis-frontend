@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react';
-import Input from '../../atoms/Input';
-import Select from '../../atoms/Select';
-import Button from '../../atoms/Button';
-import Card from '../../atoms/Card';
-import {
-  PLAYER_DIVISIONS,
-  divisionToPlayerFields,
-  playerToDivision,
-} from '../../../utils/playerDivision';
+import Input from '@/components/atoms/Input';
+import Select from '@/components/atoms/Select';
+import Button from '@/components/atoms/Button';
+import Card from '@/components/atoms/Card';
+import { GENDERS, EXPERTISE_LEVELS } from '@/utils/playerDivision';
 
-const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
+const PlayerForm = ({ player = null, onSubmit, onCancel, embedded = false, formId }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    division: '',
+    category: 'Men',
+    expertise_level: 'Beginner',
+    pyramid_tier: '',
   });
 
   const [errors, setErrors] = useState({});
@@ -24,7 +22,14 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
       setFormData({
         name: player.name || '',
         email: player.email || '',
-        division: playerToDivision(player),
+        category: player.category === 'Women' ? 'Women' : 'Men',
+        expertise_level: EXPERTISE_LEVELS.includes(player.expertise_level)
+          ? player.expertise_level
+          : 'Beginner',
+        pyramid_tier:
+          player.pyramid_tier != null && player.pyramid_tier !== ''
+            ? String(player.pyramid_tier)
+            : '',
       });
     }
   }, [player]);
@@ -50,14 +55,16 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
       newErrors.name = 'Name is required';
     }
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    if (!formData.division) {
-      newErrors.division = 'League is required';
+    if (!GENDERS.includes(formData.category)) {
+      newErrors.category = 'Gender division is required';
+    }
+
+    if (!EXPERTISE_LEVELS.includes(formData.expertise_level)) {
+      newErrors.expertise_level = 'Expertise level is required';
     }
 
     setErrors(newErrors);
@@ -71,22 +78,20 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
       return;
     }
 
-    const { expertise_level, category } = divisionToPlayerFields(formData.division);
     onSubmit({
       name: formData.name.trim(),
-      email: formData.email.trim(),
-      expertise_level,
-      category,
+      email: formData.email.trim() || null,
+      expertise_level: formData.expertise_level,
+      category: formData.category,
+      pyramid_tier:
+        formData.category === 'Men' && formData.pyramid_tier
+          ? Number(formData.pyramid_tier)
+          : null,
     });
   };
 
-  return (
-    <Card className="p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">
-        {isEditing ? 'Edit Player' : 'Add New Player'}
-      </h2>
-
-      <form onSubmit={handleSubmit}>
+  const form = (
+      <form id={formId} onSubmit={handleSubmit}>
         <Input
           label="Player Name"
           name="name"
@@ -99,36 +104,74 @@ const PlayerForm = ({ player = null, onSubmit, onCancel }) => {
         />
 
         <Input
-          label="Email Address"
+          label="Email Address (optional)"
           name="email"
           type="email"
           value={formData.email}
           onChange={handleChange}
           placeholder="player@company.com"
           error={errors.email}
+        />
+
+        <Select
+          label="Gender Division"
+          name="category"
+          value={formData.category}
+          onChange={handleChange}
+          options={GENDERS.map((g) => ({ value: g, label: g }))}
+          error={errors.category}
           required
         />
 
         <Select
-          label="League"
-          name="division"
-          value={formData.division}
+          label="Expertise Level"
+          name="expertise_level"
+          value={formData.expertise_level}
           onChange={handleChange}
-          options={PLAYER_DIVISIONS.map((d) => ({ value: d.value, label: d.label }))}
-          error={errors.division}
-          placeholder="Select league"
+          options={EXPERTISE_LEVELS.map((level) => ({ value: level, label: level }))}
+          error={errors.expertise_level}
           required
         />
 
-        <div className="flex gap-3 mt-6">
-          <Button type="submit" variant="primary">
-            {isEditing ? 'Update Player' : 'Add Player'}
-          </Button>
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
+        {formData.category === 'Men' && (
+          <Select
+            label="Pyramid Tier (optional)"
+            name="pyramid_tier"
+            value={formData.pyramid_tier}
+            onChange={handleChange}
+            options={[
+              { value: '', label: 'Not in tier pyramid' },
+              { value: '1', label: 'Tier 1 (top)' },
+              { value: '2', label: 'Tier 2' },
+              { value: '3', label: 'Tier 3' },
+            ]}
+            error={errors.pyramid_tier}
+          />
+        )}
+
+        {!embedded && (
+          <div className="flex gap-3 flex-row-reverse">
+            <Button type="submit" variant="primary">
+              {isEditing ? 'Update Player' : 'Add Player'}
+            </Button>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        )}
       </form>
+  );
+
+  if (embedded) {
+    return form;
+  }
+
+  return (
+    <Card className="p-6">
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">
+        {isEditing ? 'Edit Player' : 'Add New Player'}
+      </h2>
+      {form}
     </Card>
   );
 };

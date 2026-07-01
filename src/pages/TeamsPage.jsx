@@ -1,15 +1,40 @@
-import { useState, useEffect } from 'react';
+import Button from '@/components/atoms/Button';
+import DivisionTabs from '@/components/molecules/DivisionTabs';
+import GroupAssignmentsTable from '@/components/molecules/GroupAssignmentsTable';
+import TeamCard from '@/components/molecules/TeamCard';
+import TeamCardPreview from '@/components/molecules/TeamCardPreview';
+import { buildDivisionMap, countPlayersByDivision, DEFAULT_TOURNAMENT_DIVISION, DIVISIONS, filterPlayersForDivision, getCompetitionFormatLabel } from '@/constants/divisions';
+import { DEFAULT_TOURNAMENT_FORMAT, getTournamentFormatLabel, TOURNAMENT_FORMATS } from '@/constants/tournamentFormats';
+import { useAuth } from '@/contexts/AuthContext';
+import { getDivisionSettings, updateDivisionFormat, updateDivisionTournamentFormat } from '@/services/divisionService';
+import { getPlayers } from '@/services/playerService';
+import { getEffectivePairingRules } from '@/services/teamPairingRuleService';
+import { deleteTeam, getTeams, saveTeamsForDivision, updateTeam } from '@/services/teamService';
+import { getDivisionGroups } from '@/services/tournamentService';
+import { showConfirm, showSuccess } from '@/utils/sweetAlert';
+import { buildDefaultTeamName, resolveTeamDivision } from '@/utils/teamNaming';
+import { buildDoublesTeamsWithPairingRules } from '@shared/tournament/teamPairing.js';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Button from '../components/atoms/Button';
-import TeamCard from '../components/molecules/TeamCard';
-import TeamCardPreview from '../components/molecules/TeamCardPreview';
-import LeagueTabs from '../components/molecules/LeagueTabs';
-import GroupAssignmentsTable from '../components/molecules/GroupAssignmentsTable';
-import { useAuth } from '../contexts/AuthContext';
-import { getTeams, saveTeams, deleteTeam, updateTeam } from '../services/teamService';
-import { buildDefaultTeamName, resolveTeamLeague } from '../utils/teamNaming';
-import { getPlayers } from '../services/playerService';
-import { getLeagueGroups } from '../services/tournamentService';
+
+const EMPTY_PREVIEW = buildDivisionMap([]);
+const DEFAULT_FORMATS = buildDivisionMap('doubles');
+const DEFAULT_TOURNAMENT_FORMATS = buildDivisionMap(DEFAULT_TOURNAMENT_FORMAT);
+
+const getDivisionPlayerCount = (playerStats, division) =>
+  playerStats.countsByDivision?.[division] ?? 0;
+
+const canGenerateForDivision = (playerStats, division, competitionFormat = 'doubles') => {
+  const count = getDivisionPlayerCount(playerStats, division);
+  return count >= 2 && count % 2 === 0;
+};
+
+const getFormatRequirementText = (competitionFormat) =>
+  competitionFormat === 'singles'
+    ? 'each player competes individually (even count, ≥ 2)'
+    : 'players are paired into 2-player teams (even count, ≥ 2)';
+
+const getPlayersForDivision = (players, division) => filterPlayersForDivision(players, division);
 
 const TeamsPage = () => {
   const { isAdmin } = useAuth();
@@ -18,43 +43,61 @@ const TeamsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // State for preview teams (not saved yet)
-  const [previewTeams, setPreviewTeams] = useState([]);
+  // State for preview teams per division (not saved yet)
+  const [previewTeamsByDivision, setPreviewTeamsByDivision] = useState({ ...EMPTY_PREVIEW });
   const [saving, setSaving] = useState(false);
-  const [selectedLeague, setSelectedLeague] = useState('Expert');
-  const [leagueGroups, setLeagueGroups] = useState([]);
+  const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
+  const [divisionFormats, setDivisionFormats] = useState({ ...DEFAULT_FORMATS });
+  const [divisionTournamentFormats, setDivisionTournamentFormats] = useState({ ...DEFAULT_TOURNAMENT_FORMATS });
+  const [formatSaving, setFormatSaving] = useState(false);
+  const [divisionGroups, setDivisionGroups] = useState([]);
   const [teamGroupMap, setTeamGroupMap] = useState({});
 
   // State for player counts (to show requirements)
   const [playerStats, setPlayerStats] = useState({
     total: 0,
-    expertMen: 0,
-    intermediateMen: 0,
-    women: 0,
-    players: [] // Store full player list for generation
+    countsByDivision: buildDivisionMap(0),
+    players: [],
   });
 
   // Load teams and player stats when component mounts
   useEffect(() => {
     loadTeams();
     loadPlayerStats();
+    loadDivisionFormats();
   }, []);
+
+  const loadDivisionFormats = async () => {
+    try {
+      const settings = await getDivisionSettings();
+      const formats = { ...DEFAULT_FORMATS };
+      const tournamentFormats = { ...DEFAULT_TOURNAMENT_FORMATS };
+      for (const row of settings) {
+        formats[row.division] = row.competition_format || 'doubles';
+        tournamentFormats[row.division] = row.tournament_format || DEFAULT_TOURNAMENT_FORMAT;
+      }
+      setDivisionFormats(formats);
+      setDivisionTournamentFormats(tournamentFormats);
+    } catch (err) {
+      console.error('Error loading division formats:', err);
+    }
+  };
 
   useEffect(() => {
     const loadGroups = async () => {
       try {
-        const data = await getLeagueGroups(selectedLeague);
-        setLeagueGroups(data?.groups || []);
+        const data = await getDivisionGroups(selectedDivision);
+        setDivisionGroups(data?.groups || []);
         setTeamGroupMap(data?.teamGroupMap || {});
       } catch {
-        setLeagueGroups([]);
+        setDivisionGroups([]);
         setTeamGroupMap({});
       }
     };
     if (teams.length > 0) {
       loadGroups();
     }
-  }, [selectedLeague, teams]);
+  }, [selectedDivision, teams]);
 
   // Function to fetch all teams from API
   const loadTeams = async () => {
@@ -75,161 +118,187 @@ const TeamsPage = () => {
   const loadPlayerStats = async () => {
     try {
       const players = await getPlayers();
-      const expertMen = players.filter(p => p.expertise_level === 'Expert' && (p.category === 'Men' || !p.category)).length;
-      const intermediateMen = players.filter(p => p.expertise_level === 'Intermediate' && (p.category === 'Men' || !p.category)).length;
-      const women = players.filter(p => p.category === 'Women').length;
+      const countsByDivision = countPlayersByDivision(players);
 
       setPlayerStats({
         total: players.length,
-        expertMen,
-        intermediateMen,
-        women,
-        players // Store players for team generation
+        countsByDivision,
+        players,
       });
     } catch (err) {
       console.error('Error loading player stats:', err);
     }
   };
 
-  // Function to shuffle array randomly
   const shuffleArray = (array) => {
     const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
   };
 
-  // Generate teams locally (preview mode - not saved to DB)
-  const generateTeamsLocally = () => {
-    const { players } = playerStats;
+  const generateTeamsLocally = async (division, competitionFormat) => {
+    const bucketPlayers = getPlayersForDivision(playerStats.players, division);
+    if (!canGenerateForDivision(playerStats, division, competitionFormat)) {
+      return [];
+    }
 
-    // Split players by league buckets
-    const expertMenPlayers = players.filter(
-      p => p.expertise_level === 'Expert' && (p.category === 'Men' || !p.category)
-    );
-    const intermediateMenPlayers = players.filter(
-      p => p.expertise_level === 'Intermediate' && (p.category === 'Men' || !p.category)
-    );
-    const womenPlayers = players.filter(p => p.category === 'Women');
-
-    // Shuffle each bucket
-    const shuffledExpertMen = shuffleArray(expertMenPlayers);
-    const shuffledIntermediateMen = shuffleArray(intermediateMenPlayers);
-    const shuffledWomen = shuffleArray(womenPlayers);
-
-    // Create teams within the same league/category
+    const singles = competitionFormat === 'singles';
     const generatedTeams = [];
-    // Expert League (Men)
-    for (let i = 0; i + 1 < shuffledExpertMen.length; i += 2) {
-      const p1 = shuffledExpertMen[i];
-      const p2 = shuffledExpertMen[i + 1];
-      generatedTeams.push({
-        team_name: buildDefaultTeamName(Math.floor(i / 2) + 1),
-        player1_id: p1.id,
-        player1_name: p1.name,
-        player1_expertise: p1.expertise_level,
-        player2_id: p2.id,
-        player2_name: p2.name,
-        player2_expertise: p2.expertise_level,
-        league: 'Expert'
-      });
+
+    if (singles) {
+      const shuffledPlayers = shuffleArray(bucketPlayers);
+      for (let i = 0; i < shuffledPlayers.length; i += 1) {
+        const player = shuffledPlayers[i];
+        generatedTeams.push({
+          team_name: String(player.name || '').trim() || buildDefaultTeamName(i + 1),
+          player1_id: player.id,
+          player1_name: player.name,
+          player1_expertise: player.expertise_level,
+          player2_id: null,
+          player2_name: null,
+          player2_expertise: null,
+          division,
+        });
+      }
+      return generatedTeams;
     }
-    // Intermediate League (Men)
-    for (let i = 0; i + 1 < shuffledIntermediateMen.length; i += 2) {
-      const p1 = shuffledIntermediateMen[i];
-      const p2 = shuffledIntermediateMen[i + 1];
+
+    const pairingRules = await getEffectivePairingRules();
+    const teamPairs = buildDoublesTeamsWithPairingRules(bucketPlayers, pairingRules, division);
+
+    for (let i = 0; i < teamPairs.length; i += 1) {
+      const [p1, p2] = teamPairs[i];
       generatedTeams.push({
-        team_name: buildDefaultTeamName(Math.floor(i / 2) + 1),
+        team_name: buildDefaultTeamName(i + 1),
         player1_id: p1.id,
         player1_name: p1.name,
         player1_expertise: p1.expertise_level,
         player2_id: p2.id,
         player2_name: p2.name,
         player2_expertise: p2.expertise_level,
-        league: 'Intermediate'
-      });
-    }
-    // Women League
-    for (let i = 0; i + 1 < shuffledWomen.length; i += 2) {
-      const p1 = shuffledWomen[i];
-      const p2 = shuffledWomen[i + 1];
-      generatedTeams.push({
-        team_name: buildDefaultTeamName(Math.floor(i / 2) + 1),
-        player1_id: p1.id,
-        player1_name: p1.name,
-        player1_expertise: p1.expertise_level,
-        player2_id: p2.id,
-        player2_name: p2.name,
-        player2_expertise: p2.expertise_level,
-        league: 'Women'
+        division,
       });
     }
 
     return generatedTeams;
   };
 
-  // Function to generate random teams (preview mode - not saved to DB)
-  const handleGenerateTeams = () => {
-    // Check requirements before generating
+  const handleFormatChange = async (newFormat) => {
+    if (newFormat === selectedCompetitionFormat) return;
+
+    const existingDivisionTeams = teamsByDivision(selectedDivision);
+    if (existingDivisionTeams.length > 0) {
+      setError(
+        `Cannot change format while teams exist in ${selectedDivisionLabel}. Delete teams first.`
+      );
+      return;
+    }
+
+    try {
+      setFormatSaving(true);
+      setError(null);
+      await updateDivisionFormat(selectedDivision, newFormat);
+      setDivisionFormats((prev) => ({ ...prev, [selectedDivision]: newFormat }));
+      setPreviewTeamsByDivision((prev) => ({ ...prev, [selectedDivision]: [] }));
+    } catch (err) {
+      setError(err.message || 'Failed to update competition format');
+    } finally {
+      setFormatSaving(false);
+    }
+  };
+
+  const handleTournamentFormatChange = async (newFormat) => {
+    if (newFormat === selectedTournamentFormat) return;
+
+    const existingDivisionTeams = teamsByDivision(selectedDivision);
+    if (existingDivisionTeams.length > 0) {
+      setError(
+        `Cannot change tournament format while teams exist in ${selectedDivisionLabel}. Delete teams first.`
+      );
+      return;
+    }
+
+    try {
+      setFormatSaving(true);
+      setError(null);
+      await updateDivisionTournamentFormat(selectedDivision, newFormat);
+      setDivisionTournamentFormats((prev) => ({ ...prev, [selectedDivision]: newFormat }));
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to update tournament format');
+    } finally {
+      setFormatSaving(false);
+    }
+  };
+
+  const handleGenerateTeams = async () => {
+    const divisionLabel = DIVISIONS.find((l) => l.value === selectedDivision)?.label || selectedDivision;
+
     if (playerStats.total === 0) {
       setError('No players found. Please add players first.');
       return;
     }
 
-    // Determine if at least one league has an even count and enough players
-    const expertOk = playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0;
-    const intermediateOk = playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0;
-    const womenOk = playerStats.women >= 2 && playerStats.women % 2 === 0;
-    if (!expertOk && !intermediateOk && !womenOk) {
+    if (!canGenerateForDivision(playerStats, selectedDivision, selectedCompetitionFormat)) {
+      const count = getDivisionPlayerCount(playerStats, selectedDivision);
       setError(
-        `Cannot generate teams. Need even numbers per league with at least 2 players. ` +
-        `Expert: ${playerStats.expertMen}, Intermediate: ${playerStats.intermediateMen}, Women: ${playerStats.women}`
+        `Cannot generate ${divisionLabel} ${selectedCompetitionFormat === 'singles' ? 'entrants' : 'teams'}. Need an even number of players (≥ 2). Found ${count}.`
       );
       return;
     }
 
-    // Warn if teams already exist
-    if (teams.length > 0) {
-      const confirmed = window.confirm(
-        'You have existing teams. Generating new teams will create a preview. ' +
-        'You can edit team names before saving. Continue?'
-      );
+    const existingDivisionTeams = teamsByDivision(selectedDivision);
+    if (existingDivisionTeams.length > 0 || activePreviewTeams.length > 0) {
+      const confirmed = await showConfirm({
+        title: 'Generate new team preview?',
+        text:
+          `This will create a new preview for ${divisionLabel}. Saving will replace ${existingDivisionTeams.length} existing team(s) in this division only. Other divisions are not affected.`,
+        confirmText: 'Continue',
+      });
       if (!confirmed) {
         return;
       }
     }
 
-    // Generate teams locally (preview mode)
     setError(null);
-    const generatedTeams = generateTeamsLocally();
-    setPreviewTeams(generatedTeams);
+    try {
+      const generatedTeams = await generateTeamsLocally(selectedDivision, selectedCompetitionFormat);
+      setPreviewTeamsByDivision((prev) => ({
+        ...prev,
+        [selectedDivision]: generatedTeams,
+      }));
 
-    // Scroll to preview section
-    setTimeout(() => {
-      document.getElementById('preview-section')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+      setTimeout(() => {
+        document.getElementById('preview-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } catch (err) {
+      setError(err.message || 'Failed to generate teams');
+    }
   };
 
-  // Handle team name change in preview
   const handleTeamNameChange = (index, newName) => {
-    const updatedTeams = [...previewTeams];
-    updatedTeams[index].team_name = newName;
-    setPreviewTeams(updatedTeams);
+    setPreviewTeamsByDivision((prev) => {
+      const divisionPreview = [...(prev[selectedDivision] || [])];
+      divisionPreview[index] = { ...divisionPreview[index], team_name: newName };
+      return { ...prev, [selectedDivision]: divisionPreview };
+    });
   };
 
-  // Handle confirm and save teams to database
   const handleConfirmAndSave = async () => {
-    if (previewTeams.length === 0) {
-      setError('No teams to save');
+    if (activePreviewTeams.length === 0) {
+      setError('No teams to save for this division');
       return;
     }
 
-    // Confirm before saving
-    const confirmed = window.confirm(
-      `Save ${previewTeams.length} teams to database? This will replace any existing teams.`
-    );
+    const divisionLabel = DIVISIONS.find((l) => l.value === selectedDivision)?.label || selectedDivision;
+    const confirmed = await showConfirm({
+      title: 'Save teams?',
+      text:
+        `Save ${activePreviewTeams.length} team(s) to ${divisionLabel}? This replaces existing teams and matches for this division only.`,
+      confirmText: 'Save teams',
+    });
     if (!confirmed) {
       return;
     }
@@ -238,27 +307,15 @@ const TeamsPage = () => {
       setSaving(true);
       setError(null);
 
-      // Delete existing teams first (if any)
-      if (teams.length > 0) {
-        // Delete all existing teams
-        for (const team of teams) {
-          try {
-            await deleteTeam(team.id);
-          } catch (err) {
-            console.error('Error deleting team:', err);
-          }
-        }
-      }
+      await saveTeamsForDivision(activePreviewTeams, selectedDivision);
 
-      // Save new teams to database
-      await saveTeams(previewTeams);
-
-      // Clear preview and reload teams
-      setPreviewTeams([]);
+      setPreviewTeamsByDivision((prev) => ({ ...prev, [selectedDivision]: [] }));
       await loadTeams();
 
-      // Show success message
-      alert(`Successfully saved ${previewTeams.length} teams to database!`);
+      await showSuccess(
+        'Teams saved',
+        `Successfully saved ${activePreviewTeams.length} team(s) to ${divisionLabel}!`
+      );
     } catch (err) {
       setError(err.message || 'Failed to save teams');
       console.error('Error saving teams:', err);
@@ -267,10 +324,16 @@ const TeamsPage = () => {
     }
   };
 
-  // Handle cancel preview
-  const handleCancelPreview = () => {
-    if (window.confirm('Discard preview teams? They will not be saved.')) {
-      setPreviewTeams([]);
+  const handleCancelPreview = async () => {
+    const confirmed = await showConfirm({
+      title: 'Discard preview?',
+      text: `Discard preview teams for ${selectedDivision} division?`,
+      confirmText: 'Discard',
+      icon: 'warning',
+      variant: 'danger',
+    });
+    if (confirmed) {
+      setPreviewTeamsByDivision((prev) => ({ ...prev, [selectedDivision]: [] }));
       setError(null);
     }
   };
@@ -292,47 +355,57 @@ const TeamsPage = () => {
 
   // Handle delete team
   const handleDelete = async (teamId) => {
-    if (window.confirm('Are you sure you want to delete this team?')) {
-      try {
-        await deleteTeam(teamId);
-        loadTeams(); // Reload list after deletion
-      } catch (err) {
-        setError(err.message || 'Failed to delete team');
-        console.error('Error deleting team:', err);
-      }
+    const confirmed = await showConfirm({
+      title: 'Delete team?',
+      text: 'Are you sure you want to delete this team?',
+      confirmText: 'Delete',
+      icon: 'warning',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteTeam(teamId);
+      loadTeams();
+    } catch (err) {
+      setError(err.message || 'Failed to delete team');
+      console.error('Error deleting team:', err);
     }
   };
 
-  // Check if team generation is possible
-  const canGenerateTeams = (() => {
-    if (playerStats.total <= 0) return false;
-    const expertOk = playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0;
-    const intermediateOk = playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0;
-    const womenOk = playerStats.women >= 2 && playerStats.women % 2 === 0;
-    return expertOk || intermediateOk || womenOk;
-  })();
+  const teamsByDivision = (division) =>
+    teams.filter((team) => resolveTeamDivision(team) === division);
 
-  const teamsByLeague = (league) =>
-    teams.filter((team) => resolveTeamLeague(team) === league);
+  const selectedDivisionLabel =
+    DIVISIONS.find((l) => l.value === selectedDivision)?.label || selectedDivision;
 
-  const previewByLeague = (league) =>
-    previewTeams.filter((team) => resolveTeamLeague(team) === league);
+  const selectedCompetitionFormat = divisionFormats[selectedDivision] || 'doubles';
+  const selectedTournamentFormat = divisionTournamentFormats[selectedDivision] || DEFAULT_TOURNAMENT_FORMAT;
+  const isSinglesDivision = selectedCompetitionFormat === 'singles';
+  const entrantLabel = isSinglesDivision ? 'entrants' : 'teams';
+  const entrantLabelSingular = isSinglesDivision ? 'entrant' : 'team';
 
-  const leagueTeamCounts = {
-    Expert: teamsByLeague('Expert').length,
-    Intermediate: teamsByLeague('Intermediate').length,
-    Women: teamsByLeague('Women').length,
-  };
+  const canGenerateForSelectedDivision = canGenerateForDivision(
+    playerStats,
+    selectedDivision,
+    selectedCompetitionFormat
+  );
 
-  const activeTeams = teamsByLeague(selectedLeague);
-  const activePreviewTeams = previewByLeague(selectedLeague);
+  const activePreviewTeams = previewTeamsByDivision[selectedDivision] || [];
+  const hasPreviewForSelected = activePreviewTeams.length > 0;
 
-  const getPreviewIndex = (leagueTeam) =>
-    previewTeams.findIndex(
-      (team) =>
-        team.player1_id === leagueTeam.player1_id &&
-        team.player2_id === leagueTeam.player2_id
-    );
+  const divisionTeamCounts = Object.fromEntries(
+    DIVISIONS.map((d) => [d.value, teamsByDivision(d.value).length])
+  );
+
+  const activeTeams = teamsByDivision(selectedDivision);
+
+  const getPreviewIndex = (divisionTeam) =>
+    activePreviewTeams.findIndex((team) => {
+      if (team.player1_id !== divisionTeam.player1_id) return false;
+      if (selectedCompetitionFormat === 'singles') return true;
+      return team.player2_id === divisionTeam.player2_id;
+    });
 
   return (
     <div className="space-y-6">
@@ -341,87 +414,146 @@ const TeamsPage = () => {
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Teams</h2>
           <p className="text-gray-600 mt-1">
-            Manage tournament teams ({teams.length} teams created)
+            {isAdmin
+              ? 'Manage teams per division — each division has its own generation and tournament flow'
+              : 'Browse teams per division — read-only view'}
           </p>
         </div>
         {isAdmin && (
-          <Button
-            onClick={handleGenerateTeams}
-            variant="primary"
-            disabled={!canGenerateTeams || previewTeams.length > 0}
+          <Link
+            to="/admin/team-pairing"
+            className="text-sm text-gray-500 hover:text-gray-800 underline"
           >
-            🎲 Generate Random Teams
-          </Button>
+            Doubles pairing rules
+          </Link>
         )}
       </div>
 
       {/* Requirements Info Card */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">Team Generation Requirements:</h3>
+        <h3 className="font-semibold text-blue-900 mb-2">
+          {isAdmin ? 'Generation Requirements' : 'Division overview'}
+        </h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li className={(playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
-            ✓ Expert League (Men): {playerStats.expertMen} players {playerStats.expertMen >= 2 && playerStats.expertMen % 2 === 0 ? '✓' : '✗'} (need even, ≥ 2)
-          </li>
-          <li className={(playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
-            ✓ Intermediate League (Men): {playerStats.intermediateMen} players {playerStats.intermediateMen >= 2 && playerStats.intermediateMen % 2 === 0 ? '✓' : '✗'} (need even, ≥ 2)
-          </li>
-          <li className={(playerStats.women >= 2 && playerStats.women % 2 === 0) ? 'text-green-700' : 'text-red-700'}>
-            ✓ Women League: {playerStats.women} players {playerStats.women >= 2 && playerStats.women % 2 === 0 ? '✓' : '✗'} (need even, ≥ 2)
-          </li>
-          <li className="text-blue-700">
-            → Teams are formed within the same league only (no mixed levels)
-          </li>
+          {DIVISIONS.map((division) => {
+            const count = getDivisionPlayerCount(playerStats, division.value);
+            const format = divisionFormats[division.value] || 'doubles';
+            const ok = count >= 2 && count % 2 === 0;
+            return (
+              <li key={division.value} className={ok ? 'text-green-700' : 'text-red-700'}>
+                {division.label}: {count} players — {format === 'singles' ? 'singles' : 'doubles'} ({getFormatRequirementText(format)})
+              </li>
+            );
+          })}
+          {isAdmin && (
+            <li className="text-blue-700">
+              Each division can be singles or doubles — choose the format before generating {entrantLabel}.
+              {!isSinglesDivision && ' Doubles generation uses pairing rules when configured.'}
+            </li>
+          )}
         </ul>
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <div className="text-sm text-gray-600">Total Teams</div>
           <div className="text-2xl font-bold text-gray-900">{teams.length}</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Expert Teams</div>
-          <div className="text-2xl font-bold text-purple-600">{leagueTeamCounts.Expert}</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Intermediate Teams</div>
-          <div className="text-2xl font-bold text-blue-600">{leagueTeamCounts.Intermediate}</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="text-sm text-gray-600">Women Teams</div>
-          <div className="text-2xl font-bold text-pink-600">{leagueTeamCounts.Women}</div>
+          <div className="text-sm text-gray-600">{selectedDivisionLabel}</div>
+          <div className="text-2xl font-bold text-purple-600">{divisionTeamCounts[selectedDivision] || 0}</div>
         </div>
       </div>
 
-      <LeagueTabs
-        selected={selectedLeague}
-        onChange={setSelectedLeague}
-        counts={leagueTeamCounts}
+      <DivisionTabs
+        selected={selectedDivision}
+        onChange={setSelectedDivision}
+        counts={divisionTeamCounts}
       />
 
-      {!loading && activeTeams.length > 0 && leagueGroups.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-900">
-          Group assignments appear after you generate the group-stage schedule on the{' '}
-          <Link to="/matches" className="font-medium underline">
-            Matches page
-          </Link>
-          .
+      {isAdmin && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="space-y-3">
+            <div>
+              <h3 className="font-semibold text-gray-900">{selectedDivisionLabel}</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Competition: <span className="font-medium">{getCompetitionFormatLabel(selectedCompetitionFormat)}</span>
+                {' · '}
+                Tournament: <span className="font-medium">{getTournamentFormatLabel(selectedTournamentFormat)}</span>
+                {' — '}
+                Generate and save {entrantLabel} for this division only.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-700">Competition format:</span>
+              <select
+                value={selectedCompetitionFormat}
+                onChange={(e) => handleFormatChange(e.target.value)}
+                disabled={formatSaving || activeTeams.length > 0}
+                className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white disabled:opacity-60"
+                aria-label={`Competition format for ${selectedDivisionLabel}`}
+              >
+                <option value="doubles">Doubles (2-player teams)</option>
+                <option value="singles">Singles (individual players)</option>
+              </select>
+              <span className="text-sm text-gray-700 ml-2">Tournament format:</span>
+              <select
+                value={selectedTournamentFormat}
+                onChange={(e) => handleTournamentFormatChange(e.target.value)}
+                disabled={formatSaving || activeTeams.length > 0}
+                className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white disabled:opacity-60"
+                aria-label={`Tournament format for ${selectedDivisionLabel}`}
+              >
+                {TOURNAMENT_FORMATS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              {activeTeams.length > 0 && (
+                <span className="text-xs text-amber-700">Delete existing {entrantLabel} to change formats</span>
+              )}
+            </div>
+          </div>
+          <Button
+            onClick={handleGenerateTeams}
+            variant="primary"
+            disabled={!canGenerateForSelectedDivision || hasPreviewForSelected}
+          >
+            🎲 Generate {selectedDivisionLabel} {isSinglesDivision ? 'Entrants' : 'Teams'}
+          </Button>
         </div>
       )}
 
-      {!loading && leagueGroups.length > 0 && (
-        <GroupAssignmentsTable groups={leagueGroups} league={selectedLeague} />
+      {!loading && activeTeams.length > 0 && divisionGroups.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-900">
+          {isAdmin ? (
+            <>
+              Group assignments appear after you generate the group-stage schedule on the{' '}
+              <Link to="/matches" className="font-medium underline">
+                Matches page
+              </Link>
+              .
+            </>
+          ) : (
+            'Group assignments will appear here once the group-stage schedule is published.'
+          )}
+        </div>
       )}
 
-      {/* Preview Section */}
-      {previewTeams.length > 0 && (
+      {!loading && divisionGroups.length > 0 && (
+        <GroupAssignmentsTable groups={divisionGroups} division={selectedDivision} />
+      )}
+
+      {/* Preview Section — admin only */}
+      {isAdmin && hasPreviewForSelected && (
         <div id="preview-section" className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xl font-bold text-yellow-900">Preview Teams</h3>
+              <h3 className="text-xl font-bold text-yellow-900">{selectedDivisionLabel} — Preview {isSinglesDivision ? 'Entrants' : 'Teams'}</h3>
               <p className="text-sm text-yellow-800 mt-1">
-                Review and edit team names before saving. Teams are not saved to database yet.
+                Review and edit team names before saving. Only this division will be updated.
               </p>
             </div>
             <div className="flex gap-2">
@@ -445,7 +577,7 @@ const TeamsPage = () => {
 
           {activePreviewTeams.length === 0 ? (
             <div className="text-center py-8 text-yellow-800">
-              No preview teams for {selectedLeague} league.
+              No preview teams for {selectedDivision} division.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -453,10 +585,11 @@ const TeamsPage = () => {
                 const index = getPreviewIndex(team);
                 return (
                   <TeamCardPreview
-                    key={`${team.player1_id}-${team.player2_id}`}
+                    key={`${team.player1_id}-${team.player2_id ?? 'singles'}`}
                     team={team}
                     index={index}
                     onNameChange={handleTeamNameChange}
+                    isSingles={isSinglesDivision}
                   />
                 );
               })}
@@ -487,13 +620,16 @@ const TeamsPage = () => {
               <div className="text-6xl mb-4">🏓</div>
               <p className="text-gray-600 text-lg mb-2">No teams created yet</p>
               <p className="text-gray-500 text-sm mb-6">
-                Click "Generate Random Teams" to automatically create teams
+                {isAdmin
+                  ? `Select a division tab and click "Generate … Teams" to create teams for that division`
+                  : 'Teams will appear here once they are created for a division'}
               </p>
-              {!canGenerateTeams && (
+              {isAdmin && !canGenerateForSelectedDivision && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
                   <p className="text-yellow-800 text-sm">
                     {playerStats.total === 0 && 'Add players first'}
-                    {playerStats.total > 0 && 'Need even numbers within at least one league (Expert Men, Intermediate Men, or Women)'}
+                    {playerStats.total > 0 &&
+                      `${selectedDivisionLabel} needs an even number of players (≥ 2)`}
                   </p>
                 </div>
               )}
@@ -503,10 +639,12 @@ const TeamsPage = () => {
           {teams.length > 0 && activeTeams.length === 0 && (
             <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
               <p className="text-gray-600 text-lg mb-2">
-                No teams in {selectedLeague} league
+                No teams in {selectedDivisionLabel}
               </p>
               <p className="text-gray-500 text-sm">
-                Switch tabs to view teams from another league
+                {isAdmin
+                  ? 'Use the generate button above to create teams for this division'
+                  : 'No teams are registered for this division yet.'}
               </p>
             </div>
           )}
@@ -521,6 +659,7 @@ const TeamsPage = () => {
                   onDelete={handleDelete}
                   onSaveName={isAdmin ? handleSaveTeamName : undefined}
                   isAdmin={isAdmin}
+                  isSingles={team.player2_id == null}
                 />
               ))}
             </div>

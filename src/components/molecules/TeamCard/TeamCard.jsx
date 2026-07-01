@@ -1,28 +1,28 @@
 import { useState } from 'react';
-import Badge from '../../atoms/Badge';
-import Button from '../../atoms/Button';
+import Badge from '@/components/atoms/Badge';
+import Button from '@/components/atoms/Button';
 import TeamNameEditor from '../TeamNameEditor/TeamNameEditor';
-import { getLeagueLabel, normalizeTeamName, resolveTeamLeague } from '../../../utils/teamNaming';
+import { getDivisionLabel, normalizeTeamName, resolveTeamDivision } from '@/utils/teamNaming';
+import { getDivisionBadgeVariant, getExpertiseBadgeVariant } from '@/utils/divisionBadge';
 
-const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false }) => {
-  const league = resolveTeamLeague(team);
-  const displayName = normalizeTeamName(team.team_name, league);
+const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSingles = false }) => {
+  const division = resolveTeamDivision(team);
+  const displayName = normalizeTeamName(team.team_name, division);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(displayName);
   const [saving, setSaving] = useState(false);
 
-  const leagueBadge = (() => {
-    const label = getLeagueLabel(league);
-    if (league === 'Expert') return <Badge variant="expert">{label}</Badge>;
-    if (league === 'Intermediate') return <Badge variant="intermediate">{label}</Badge>;
-    if (league === 'Women') return <Badge variant="secondary">{label}</Badge>;
-    return <Badge variant="primary">{label}</Badge>;
+  const divisionBadge = (() => {
+    const label = getDivisionLabel(division);
+    return <Badge variant={getDivisionBadgeVariant(division)}>{label}</Badge>;
   })();
 
-  const players = [
-    { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
-    { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
-  ];
+  const players = isSingles || team.player2_id == null
+    ? [{ name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise }]
+    : [
+      { name: team.player1_name, id: team.player1_id, expertise: team.player1_expertise },
+      { name: team.player2_name, id: team.player2_id, expertise: team.player2_expertise },
+    ];
 
   const handleStartEdit = () => {
     setDraftName(displayName);
@@ -58,68 +58,80 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false }) => {
                 teamName={draftName}
                 fallbackNumber={team.id}
                 onChange={setDraftName}
+                isSingles={isSingles || team.player2_id == null}
               />
             </div>
           ) : (
-            <h3 className="text-xl text-gray-900"><span className='font-medium'>Team</span> <span className='font-bold'>{displayName}</span></h3>
+            <h3 className="text-xl text-gray-900">
+              <span className="font-medium">{isSingles || team.player2_id == null ? '' : 'Team'}</span>{' '}
+              <span className="font-bold">{displayName}</span>
+            </h3>
           )}
           <div className="flex flex-wrap gap-1.5 justify-end">
             {groupId && (
               <Badge variant="success">Group {groupId}</Badge>
             )}
-            {leagueBadge}
           </div>
+          {isAdmin && (
+            <div className="flex gap-2 justify-end items-center flex-wrap">
+              {editing ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={saving}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={saving || !draftName.trim()}
+                  >
+                    {saving ? 'Saving...' : 'Save name'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {onDelete && (
+                    <Button variant="danger" size="sm" onClick={() => onDelete(team.id)}>
+                      Delete
+                    </Button>
+                  )}
+                  {onSaveName && (
+                    <Button variant="outline" size="sm" onClick={handleStartEdit}>
+                      Edit Name
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">
           {players.map((p, idx) => (
             <div
               key={idx}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+              className="flex flex-col gap-2"
             >
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">{p.name}</p>
-                {/* <p className="text-xs text-gray-600">Player ID: {p.id}</p> */}
+              {!(isSingles || team.player2_id == null) && (
+                <div className="flex-1 flex gap-2 justify-between items-center p-3 bg-gray-100 rounded-lg border border-gray-300">
+                  <p className="font-medium text-gray-900">{p.name}</p>
+                  <p className="text-xs text-gray-600">Player ID: {p.id}</p>
+                </div>
+              )}
+
+              <div className="flex-1 flex gap-2 justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-200">
+                <span>
+                  {divisionBadge}
+                </span>
+
+                <Badge variant={getExpertiseBadgeVariant(p.expertise)}>
+                  {p.expertise}
+                </Badge>
               </div>
-              <Badge variant={p.expertise === 'Expert' ? 'expert' : 'intermediate'}>
-                {p.expertise}
-              </Badge>
             </div>
           ))}
         </div>
 
-        {isAdmin && (
-          <div className="flex gap-2 justify-end pt-2 border-t border-gray-200 mt-auto">
-            {editing ? (
-              <>
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={saving || !draftName.trim()}
-                >
-                  {saving ? 'Saving...' : 'Save name'}
-                </Button>
-              </>
-            ) : (
-              <>
-                {onDelete && (
-                  <Button variant="danger" size="sm" onClick={() => onDelete(team.id)}>
-                    Delete
-                  </Button>
-                )}
-                {onSaveName && (
-                  <Button variant="outline" size="sm" onClick={handleStartEdit}>
-                    Edit name
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

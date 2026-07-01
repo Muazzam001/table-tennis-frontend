@@ -1,5 +1,5 @@
 // API service functions for authentication
-import api from '../utils/api.js';
+import api from '@/utils/api.js';
 
 // Login
 export const login = async (username, password) => {

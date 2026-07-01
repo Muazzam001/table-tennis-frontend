@@ -1,11 +1,11 @@
-import Badge from '../../atoms/Badge';
-import Button from '../../atoms/Button';
-import { getPlayerDivisionLabel } from '../../../utils/playerDivision';
+import Badge from '@/components/atoms/Badge';
+import Button from '@/components/atoms/Button';
+import { getPlayerDivisionLabel } from '@/utils/playerDivision';
+import { getExpertiseBadgeVariant } from '@/utils/divisionBadge';
 
 const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
-  const isWomen = player.category === 'Women';
   const divisionLabel = getPlayerDivisionLabel(player);
-  const badgeVariant = isWomen ? 'secondary' : player.expertise_level === 'Expert' ? 'expert' : 'intermediate';
+  const badgeVariant = getExpertiseBadgeVariant(player.expertise_level);
 
   return (
     <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200 hover:shadow-lg transition-shadow">
@@ -14,6 +14,9 @@ const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
           <h3 className="text-xl font-semibold text-gray-900">{player.name}</h3>
           <div className="flex items-center gap-2">
             <Badge variant={badgeVariant}>{divisionLabel}</Badge>
+            {player.pyramid_tier != null && (
+              <Badge variant={`tier${player.pyramid_tier}`}>T{player.pyramid_tier}</Badge>
+            )}
             {!player.is_active && <Badge variant="default">Inactive</Badge>}
           </div>
         </div>

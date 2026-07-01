@@ -1,0 +1,174 @@
+/**
+ * SweetAlert2 theme — references app design tokens from index.css @theme.
+ * Aliases below keep this file readable; update colors in index.css only.
+ */
+:root {
+  --swal-font-sans: var(--font-sans);
+  --swal-font-display: var(--font-display);
+  --swal-color-primary: var(--color-primary);
+  --swal-color-primary-dark: var(--color-primary-dark);
+  --swal-color-primary-subtle: var(--color-primary-subtle);
+  --swal-color-secondary: var(--color-secondary);
+  --swal-color-success: var(--color-success);
+  --swal-color-warning: var(--color-warning);
+  --swal-color-danger: var(--color-danger);
+  --swal-color-surface: var(--color-surface);
+  --swal-color-text: var(--color-text);
+  --swal-color-text-muted: var(--color-text-muted);
+  --swal-color-border: var(--color-border);
+  --swal-color-input-border: var(--color-input-border);
+  --swal-radius-md: var(--radius-md);
+  --swal-radius-lg: var(--radius-lg);
+  --swal-shadow-lg: var(--shadow-lg);
+  --swal-backdrop: var(--overlay-backdrop);
+  --swal-focus-ring: color-mix(in srgb, var(--swal-color-primary) 20%, transparent);
+  --swal-success-ring: color-mix(in srgb, var(--swal-color-success) 30%, transparent);
+}
+
+.tt-swal-container {
+  font-family: var(--swal-font-sans);
+}
+
+.tt-swal-popup {
+  width: 100%;
+  max-width: 28rem;
+  padding: 1.75rem 1.5rem 1.5rem;
+  border-radius: var(--swal-radius-lg);
+  border: 1px solid var(--swal-color-border);
+  background: var(--swal-color-surface);
+  box-shadow: var(--swal-shadow-lg);
+}
+
+.tt-swal-title {
+  font-family: var(--swal-font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--swal-color-text);
+  padding: 0;
+  margin: 0 0 0.5rem;
+}
+
+.tt-swal-html,
+.tt-swal-html-container {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--swal-color-text-muted);
+  margin: 0;
+}
+
+.tt-swal-actions {
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tt-swal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.5rem;
+  padding: 0.5rem 1rem;
+  font-family: var(--swal-font-sans);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  border-radius: var(--swal-radius-md);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.tt-swal-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--swal-color-surface), 0 0 0 4px var(--swal-color-primary);
+}
+
+.tt-swal-btn--confirm,
+.tt-swal-btn--danger {
+  background-color: var(--swal-color-primary);
+  color: var(--swal-color-surface);
+}
+
+.tt-swal-btn--confirm:hover,
+.tt-swal-btn--danger:hover {
+  background-color: var(--swal-color-primary-dark);
+}
+
+.tt-swal-btn--cancel {
+  background-color: var(--swal-color-surface);
+  color: var(--swal-color-primary);
+  border-color: var(--swal-color-primary);
+}
+
+.tt-swal-btn--cancel:hover {
+  background-color: var(--swal-color-primary-subtle);
+}
+
+.tt-swal-icon {
+  margin: 0 auto 1rem;
+  transform: scale(0.85);
+}
+
+.tt-swal-popup .swal2-icon.swal2-success {
+  border-color: var(--swal-color-success);
+  color: var(--swal-color-success);
+}
+
+.tt-swal-popup .swal2-icon.swal2-success [class^='swal2-success-line'] {
+  background-color: var(--swal-color-success);
+}
+
+.tt-swal-popup .swal2-icon.swal2-success .swal2-success-ring {
+  border-color: var(--swal-success-ring);
+}
+
+.tt-swal-popup .swal2-icon.swal2-error {
+  border-color: var(--swal-color-danger);
+  color: var(--swal-color-danger);
+}
+
+.tt-swal-popup .swal2-icon.swal2-error [class^='swal2-x-mark-line'] {
+  background-color: var(--swal-color-danger);
+}
+
+.tt-swal-popup .swal2-icon.swal2-warning {
+  border-color: var(--swal-color-warning);
+  color: var(--swal-color-warning);
+}
+
+.tt-swal-popup .swal2-icon.swal2-info,
+.tt-swal-popup .swal2-icon.swal2-question {
+  border-color: var(--swal-color-secondary);
+  color: var(--swal-color-secondary);
+}
+
+.tt-swal-popup .swal2-input,
+.tt-swal-popup .swal2-textarea {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-family: var(--swal-font-sans);
+  font-size: 0.9375rem;
+  color: var(--swal-color-text);
+  border: 1px solid var(--swal-color-input-border);
+  border-radius: var(--swal-radius-md);
+  box-shadow: none;
+}
+
+.tt-swal-popup .swal2-input:focus,
+.tt-swal-popup .swal2-textarea:focus {
+  border-color: var(--swal-color-primary);
+  box-shadow: 0 0 0 2px var(--swal-focus-ring);
+}
+
+.tt-swal-popup .swal2-validation-message {
+  background: var(--swal-color-primary-subtle);
+  color: var(--swal-color-primary-dark);
+  font-size: 0.875rem;
+}
+
+.swal2-container.swal2-backdrop-show {
+  background: var(--swal-backdrop);
+}

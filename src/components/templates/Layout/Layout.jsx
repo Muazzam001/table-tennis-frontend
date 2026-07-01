@@ -1,4 +1,4 @@
-import Navigation from '../../molecules/Navigation';
+import Navigation from '@/components/molecules/Navigation';
 
 const Layout = ({ children }) => {
   return (

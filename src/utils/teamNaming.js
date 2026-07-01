@@ -1,7 +1,7 @@
 export {
-  LEAGUE_LABELS,
-  getLeagueLabel,
+  DIVISION_LABELS,
+  getDivisionLabel,
   buildDefaultTeamName,
   normalizeTeamName,
-  resolveTeamLeague,
-} from '../../../shared/teamNaming.js';
+  resolveTeamDivision,
+} from '@shared/tournament/teamNaming.js';

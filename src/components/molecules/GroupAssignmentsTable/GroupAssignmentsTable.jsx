@@ -1,7 +1,7 @@
-import Badge from '../../atoms/Badge';
-import { normalizeTeamName } from '../../../utils/teamNaming';
+import Badge from '@/components/atoms/Badge';
+import { normalizeTeamName } from '@/utils/teamNaming';
 
-const GroupAssignmentsTable = ({ groups = [], league, compact = false }) => {
+const GroupAssignmentsTable = ({ groups = [], division, compact = false }) => {
   if (!groups.length) {
     return null;
   }
@@ -10,7 +10,7 @@ const GroupAssignmentsTable = ({ groups = [], league, compact = false }) => {
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
         <h3 className="font-semibold text-gray-900">
-          Group assignments{league ? ` — ${league} League` : ''}
+          Group assignments{division ? ` — ${division} Division` : ''}
         </h3>
         {!compact && (
           <p className="text-sm text-gray-600 mt-0.5">
@@ -28,7 +28,7 @@ const GroupAssignmentsTable = ({ groups = [], league, compact = false }) => {
             <ul className="divide-y divide-gray-100">
               {(group.teams || []).map((team) => (
                 <li key={team.id} className="px-3 py-2 text-sm text-gray-800">
-                  {normalizeTeamName(team.team_name, league)}
+                  {normalizeTeamName(team.team_name, division)}
                 </li>
               ))}
             </ul>

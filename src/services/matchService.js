@@ -1,10 +1,11 @@
 // API service functions for match operations
-import api from '../utils/api.js';
+import api from '@/utils/api.js';
 
-// Get all matches
-export const getMatches = async () => {
+// Get all matches (optionally filtered by division)
+export const getMatches = async (division = null) => {
   try {
-    const response = await api.get('/matches');
+    const params = division ? `?division=${encodeURIComponent(division)}` : '';
+    const response = await api.get(`/matches${params}`);
     return response.data || [];
   } catch (error) {
     throw error;
@@ -22,12 +23,12 @@ export const getMatchesByRound = async (roundType) => {
 };
 
 // Get team standings
-export const getTeamStandings = async (pool = null, roundType = null, league = null) => {
+export const getTeamStandings = async (pool = null, roundType = null, division = null) => {
   try {
     const params = new URLSearchParams();
     if (pool) params.append('pool', pool);
     if (roundType) params.append('roundType', roundType);
-    if (league) params.append('league', league);
+    if (division) params.append('division', division);
 
     const response = await api.get(`/matches/standings?${params.toString()}`);
     return response.data || [];
@@ -56,10 +57,10 @@ export const createMatch = async (matchData) => {
   }
 };
 
-// Create multiple matches at once
-export const createMultipleMatches = async (matches) => {
+// Create multiple matches at once (optional division scopes and validates inserts)
+export const createMultipleMatches = async (matches, division = null) => {
   try {
-    const response = await api.post('/matches/multiple', { matches });
+    const response = await api.post('/matches/multiple', { matches, division });
     return response.data || response;
   } catch (error) {
     throw error;
@@ -67,27 +68,29 @@ export const createMultipleMatches = async (matches) => {
 };
 
 // Generate match schedule
-export const generateMatchSchedule = async (startDate, endDate, venue, league, options = {}) => {
+export const generateMatchSchedule = async (startDate, endDate, venue, division, options = {}) => {
   try {
-    const { format = 'groups', groupCount, replaceExisting } = options;
+    const { format = 'groups', groupCount, replaceExisting, timeSlotConfig, courtConfig } = options;
     const response = await api.post('/matches/generate-schedule', {
       startDate,
       endDate: endDate || null,
       venue: venue || 'Main Court',
-      league,
+      division,
       format,
       groupCount,
       replaceExisting: Boolean(replaceExisting),
+      timeSlotConfig: timeSlotConfig || null,
+      courtConfig: courtConfig || null,
     });
     const payload = response.data || response;
     const matches = payload.matches ?? response.data?.matches ?? [];
     const config = payload.config ?? response.data?.config;
     return {
-      ...response,
       matches,
       config,
       groups: payload.groups ?? response.data?.groups,
       expectedMatchCount: payload.expectedMatchCount ?? response.data?.expectedMatchCount,
+      division: payload.division ?? response.data?.division ?? division,
     };
   } catch (error) {
     throw error;
@@ -95,12 +98,14 @@ export const generateMatchSchedule = async (startDate, endDate, venue, league, o
 };
 
 // Generate Third Place match
-export const generateThirdPlace = async (startDate, venue, league) => {
+export const generateThirdPlace = async (startDate, venue, division, timeSlotConfig = null, courtConfig = null) => {
   try {
     const response = await api.post('/matches/generate-third-place', {
       startDate,
       venue: venue || 'Main Court',
-      league,
+      division,
+      timeSlotConfig,
+      courtConfig,
     });
     return response;
   } catch (error) {
@@ -119,12 +124,14 @@ export const updateMatchResult = async (id, resultData) => {
 };
 
 // Generate Quarter Finals
-export const generateQuarterFinals = async (startDate, venue, league) => {
+export const generateQuarterFinals = async (startDate, venue, division, timeSlotConfig = null, courtConfig = null) => {
   try {
     const response = await api.post('/matches/generate-quarter-finals', {
       startDate,
       venue: venue || 'Main Court',
-      league
+      division,
+      timeSlotConfig,
+      courtConfig,
     });
     // API interceptor already returns response.data, so response is the data object
     console.log('generateQuarterFinals response:', response);
@@ -135,12 +142,14 @@ export const generateQuarterFinals = async (startDate, venue, league) => {
 };
 
 // Generate Semi Finals
-export const generateSemiFinals = async (startDate, venue, league) => {
+export const generateSemiFinals = async (startDate, venue, division, timeSlotConfig = null, courtConfig = null) => {
   try {
     const response = await api.post('/matches/generate-semi-finals', {
       startDate,
       venue: venue || 'Main Court',
-      league
+      division,
+      timeSlotConfig,
+      courtConfig,
     });
     // API interceptor already returns response.data, so response is the data object
     return response;
@@ -150,14 +159,33 @@ export const generateSemiFinals = async (startDate, venue, league) => {
 };
 
 // Generate Final
-export const generateFinal = async (startDate, venue, league) => {
+export const generateFinal = async (startDate, venue, division, timeSlotConfig = null, courtConfig = null) => {
   try {
     const response = await api.post('/matches/generate-final', {
       startDate,
       venue: venue || 'Main Court',
-      league
+      division,
+      timeSlotConfig,
+      courtConfig,
     });
     // API interceptor already returns response.data, so response is the data object
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Auto-fill match results for testing (admin only)
+export const autoFillMatchResults = async (division, options = {}) => {
+  try {
+    const { roundType, fillAll, setConfig, gamePointsPerSet } = options;
+    const response = await api.post('/matches/auto-fill-results', {
+      division,
+      roundType,
+      fillAll: Boolean(fillAll),
+      setConfig,
+      gamePointsPerSet,
+    });
     return response;
   } catch (error) {
     throw error;
