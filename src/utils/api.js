@@ -33,10 +33,16 @@ api.interceptors.response.use(
     return response.data;
   },
   (error) => {
-    // Handle network errors (backend not running)
+    // Handle network errors (backend unreachable or CORS blocked)
     if (!error.response) {
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-        return Promise.reject(new Error('Backend server is not running. Please start the backend server on port 3000.'));
+        const isLocalDev =
+          window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1';
+        const message = isLocalDev
+          ? 'Backend server is not running. Please start the backend server on port 3000.'
+          : 'Unable to reach the API server. Check that the backend is deployed on Vercel and CORS_ORIGIN matches this site.';
+        return Promise.reject(new Error(message));
       }
     }
     
