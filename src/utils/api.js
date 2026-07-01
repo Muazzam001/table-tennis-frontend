@@ -56,9 +56,12 @@ api.interceptors.response.use(
     }
     
     // Extract error message from response or use default
-    let message = error.response?.data?.error?.message 
-      || error.response?.data?.message 
-      || error.message 
+    const responseData = error.response?.data;
+    let message =
+      (typeof responseData === 'string' ? responseData.split('\n')[0].trim() : null)
+      || responseData?.error?.message
+      || responseData?.message
+      || error.message
       || 'An error occurred';
     
     // Sanitize error messages - remove database/table names
