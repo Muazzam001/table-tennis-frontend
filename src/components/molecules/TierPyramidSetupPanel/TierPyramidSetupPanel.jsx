@@ -48,7 +48,8 @@ const TierPyramidSetupPanel = ({
         <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
           <p>
             Level 1: <strong>{counts.level1Total ?? counts.s1 + counts.s2}</strong> matches (S1:{' '}
-            {counts.s1}, S2: {counts.s2}) · Full tournament: <strong>{counts.total}</strong> matches
+            {counts.s1}, S2: {counts.s2}) · Knockout: L2 {counts.level2}, L3 QF {counts.level3}, SF{' '}
+          {counts.semifinals ?? 2}, Final + Third · Total: <strong>{counts.total}</strong>
           </p>
           {timeSlotSummary && courtSummary && matchesPerWeekday > 0 && (
             <p className="mt-1 text-gray-500">
