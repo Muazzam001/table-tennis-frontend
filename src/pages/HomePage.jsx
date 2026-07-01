@@ -144,7 +144,9 @@ const HomePage = () => {
       if (errorMessage.includes('Backend server is not running')) {
         setError('⚠️ Backend server not detected. Please start the backend server to view statistics.');
       } else if (errorMessage.includes('Unable to reach the API server')) {
-        setError('⚠️ Production API is unreachable. The backend at table-tennis-backend.vercel.app is not responding.');
+        setError('⚠️ Cannot reach the API. Redeploy the frontend (proxy) and ensure the backend health check returns JSON.');
+      } else if (errorMessage.includes('page could not be found') || errorMessage.includes('NOT_FOUND')) {
+        setError('⚠️ Backend API returned 404. Deploy the backend project and confirm /api/health works.');
       } else {
         setError(errorMessage);
       }
@@ -428,7 +430,7 @@ const HomePage = () => {
       </div>
 
       {error && (
-        <div className={`px-4 py-3 rounded ${error.includes('Backend server not detected') || error.includes('Production API is unreachable')
+        <div className={`px-4 py-3 rounded ${error.includes('Backend server not detected') || error.includes('Cannot reach the API') || error.includes('Backend API returned 404')
             ? 'bg-yellow-50 border border-yellow-200 text-yellow-800'
             : 'bg-red-50 border border-red-200 text-red-700'
           }`}>
@@ -446,18 +448,12 @@ const HomePage = () => {
                   </ol>
                 </div>
               )}
-              {error.includes('Production API is unreachable') && (
+              {error.includes('Cannot reach the API') && (
                 <div className="mt-2 text-sm space-y-2">
-                  <p>In the Vercel dashboard for <strong>table-tennis-backend</strong>, confirm these environment variables are set, then redeploy:</p>
-                  <ul className="list-disc list-inside space-y-1 ml-2">
-                    <li><code className="bg-yellow-100 px-1 rounded">SUPABASE_DB_PASSWORD</code></li>
-                    <li><code className="bg-yellow-100 px-1 rounded">SUPABASE_PROJECT_REF</code></li>
-                    <li><code className="bg-yellow-100 px-1 rounded">SUPABASE_POOLER_HOST</code></li>
-                    <li><code className="bg-yellow-100 px-1 rounded">JWT_SECRET</code></li>
-                    <li><code className="bg-yellow-100 px-1 rounded">CORS_ORIGIN=https://table-tennis-frontend-one.vercel.app</code></li>
-                  </ul>
+                  <p>1. Redeploy <strong>table-tennis-backend</strong> — build must create <code className="bg-yellow-100 px-1 rounded">api/index.mjs</code></p>
+                  <p>2. Redeploy <strong>table-tennis-frontend-one</strong> with <code className="bg-yellow-100 px-1 rounded">VITE_API_BASE_URL=/api</code></p>
                   <p>
-                    Verify:{' '}
+                    3. Verify:{' '}
                     <a
                       href="https://table-tennis-backend.vercel.app/api/health"
                       className="underline"
@@ -466,8 +462,14 @@ const HomePage = () => {
                     >
                       table-tennis-backend.vercel.app/api/health
                     </a>{' '}
-                    should return JSON, not a 500 error.
+                    returns JSON (not 404).
                   </p>
+                </div>
+              )}
+              {error.includes('Backend API returned 404') && (
+                <div className="mt-2 text-sm space-y-2">
+                  <p>The backend Vercel project is not serving API routes yet.</p>
+                  <p>In the backend repo: run <code className="bg-yellow-100 px-1 rounded">npm run build</code>, push, and redeploy. Build logs should show <code className="bg-yellow-100 px-1 rounded">api/index.mjs</code>.</p>
                 </div>
               )}
             </div>

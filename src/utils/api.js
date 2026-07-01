@@ -1,7 +1,15 @@
 import axios from 'axios';
 
-// Get API base URL from environment variable (set in .env file)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+/** Absolute URLs get https:// if missing; relative paths (e.g. /api) are left as-is for Vercel proxy. */
+function normalizeApiBaseUrl(url) {
+  if (!url) return url;
+  const trimmed = String(url).trim().replace(/\/+$/, '');
+  if (trimmed.startsWith('/')) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 // Create axios instance with base configuration
 const api = axios.create({
