@@ -30,7 +30,7 @@ const TierAssignmentPanel = ({
       <div>
         <h3 className="font-semibold text-gray-900">Tier assignments - {divisionLabel}</h3>
         <p className="text-sm text-gray-600 mt-1">
-          Assign each entrant to Tier 1 (highest), Tier 2, or Tier 3 before generating the pyramid schedule.
+          Assign each entrant to Tier 1 (highest), Tier 2, or Tier 3. The pyramid layout is derived from your actual tier split (unequal T2/T3 counts are supported).
         </p>
       </div>
 

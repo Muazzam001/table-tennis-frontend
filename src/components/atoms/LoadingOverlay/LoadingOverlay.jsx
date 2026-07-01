@@ -1,6 +1,6 @@
 const LoadingOverlay = ({ message = 'Loading…', submessage = null }) => (
   <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 h-screen"
     role="status"
     aria-live="polite"
     aria-busy="true"

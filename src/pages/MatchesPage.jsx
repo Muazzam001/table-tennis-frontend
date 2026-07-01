@@ -8,6 +8,7 @@ import MatchResultForm from '@/components/molecules/MatchResultForm';
 import PyramidAdminPanel from '@/components/molecules/PyramidAdminPanel/PyramidAdminPanel';
 import ScheduleWizard from '@/components/molecules/ScheduleWizard';
 import TierAssignmentPanel from '@/components/molecules/TierAssignmentPanel/TierAssignmentPanel';
+import TierPyramidConfigPanel from '@/components/molecules/TierPyramidConfigPanel/TierPyramidConfigPanel';
 import TierPyramidSetupPanel from '@/components/molecules/TierPyramidSetupPanel/TierPyramidSetupPanel';
 import TournamentSetupPanel from '@/components/molecules/TournamentSetupPanel/TournamentSetupPanel';
 import { getCourtConfig, getCourtSummary, saveCourtConfig } from '@/config/courtConfig';
@@ -99,6 +100,7 @@ const MatchesPage = () => {
   const [tierAssignments, setTierAssignments] = useState({});
   const [pyramidTierState, setPyramidTierState] = useState(null);
   const [tierSaving, setTierSaving] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
   const [entrantNameSavingId, setEntrantNameSavingId] = useState(null);
   const [progressionLog, setProgressionLog] = useState([]);
   const [logLoading, setLogLoading] = useState(false);
@@ -134,6 +136,29 @@ const MatchesPage = () => {
   const skipsSemiFinals = isSingleGroup
     ? configuredTeamCount === 4
     : setupOptions?.defaultGroupCount === 2;
+  const pyramidTierRequirements = (() => {
+    if (pyramidTierState?.config) {
+      return {
+        tier1: pyramidTierState.config.tier1Count,
+        tier2: pyramidTierState.config.tier2Count,
+        tier3: pyramidTierState.config.tier3Count,
+      };
+    }
+    if (setupOptions?.isValid && setupOptions?.tierRequirements) {
+      return setupOptions.tierRequirements;
+    }
+    const counts = { tier1: 0, tier2: 0, tier3: 0 };
+    for (const team of divisionTeams) {
+      const tier = tierAssignments[team.id] ?? team.tier;
+      if (tier === 1) counts.tier1 += 1;
+      else if (tier === 2) counts.tier2 += 1;
+      else if (tier === 3) counts.tier3 += 1;
+    }
+    if (counts.tier1 + counts.tier2 + counts.tier3 > 0) {
+      return counts;
+    }
+    return setupOptions?.tierRequirements || { tier1: 8, tier2: 12, tier3: 12 };
+  })();
   const qualifyingMatches = divisionMatches.filter((m) => m.round_type === 'Qualifying');
   const qualifyingComplete =
     qualifyingMatches.length > 0 &&
@@ -689,8 +714,10 @@ const MatchesPage = () => {
         teamId: Number(teamId),
         tier: Number(tier),
       }));
-      const data = await assignPyramidTiers(selectedDivision, assignments);
+      const data = await assignPyramidTiers(selectedDivision, assignments, null);
       setPyramidTierState(data);
+      const setup = await getTournamentSetup(selectedDivision, { timeSlotConfig, courtConfig });
+      setSetupOptions(setup);
       await showSuccess('Tiers saved', `${selectedDivisionLabel} tier assignments updated.`);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to save tier assignments');
@@ -890,13 +917,7 @@ const MatchesPage = () => {
                 {divisionTeams.length > 0 && (
                   <TierAssignmentPanel
                     teams={divisionTeams}
-                    tierRequirements={
-                      setupOptions?.tierRequirements || {
-                        tier1: pyramidTierState?.config?.tier1Count,
-                        tier2: pyramidTierState?.config?.tier2Count,
-                        tier3: pyramidTierState?.config?.tier3Count,
-                      }
-                    }
+                    tierRequirements={pyramidTierRequirements}
                     assignments={tierAssignments}
                     onTierChange={handleTierChange}
                     onSave={handleSaveTiers}
@@ -922,6 +943,23 @@ const MatchesPage = () => {
                     divisionLabel={selectedDivisionLabel}
                     tournamentStatus={pyramidStatus}
                     saving={pyramidAdminSaving}
+                  />
+                )}
+
+                {divisionTeams.length > 0 && setupReadyForDivision && (
+                  <TierPyramidConfigPanel
+                    setupOptions={setupOptions}
+                    divisionLabel={selectedDivisionLabel}
+                    saving={configSaving}
+                    setSaving={setConfigSaving}
+                    onConfigSaved={async () => {
+                      const setup = await getTournamentSetup(selectedDivision, {
+                        timeSlotConfig,
+                        courtConfig,
+                      });
+                      setSetupOptions(setup);
+                      showSuccess('Pyramid configuration saved.');
+                    }}
                   />
                 )}
 
@@ -966,8 +1004,8 @@ const MatchesPage = () => {
         <div className="text-sm text-gray-500">Loading setup for {selectedDivisionLabel}…</div>
       )}
 
-      {/* Requirements */}
-      {setupOptions && setupReadyForDivision && !setupOptions.isValid && (
+      {/* Requirements — only when setup is invalid and no derived config is available */}
+      {setupOptions && setupReadyForDivision && !setupOptions.isValid && !setupOptions.isDerived && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">
             <strong>Note:</strong> {setupOptions.rejectionReason}
