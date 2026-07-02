@@ -3,6 +3,7 @@ import Modal from '@/components/atoms/Modal';
 import DivisionTabs from '@/components/molecules/DivisionTabs';
 import PlayerCard from '@/components/molecules/PlayerCard';
 import PlayerForm from '@/components/molecules/PlayerForm';
+import SearchInput from '@/components/molecules/SearchInput';
 import {
   DEFAULT_TOURNAMENT_DIVISION,
   DIVISIONS,
@@ -22,6 +23,7 @@ const PlayersPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadPlayers();
@@ -93,8 +95,21 @@ const PlayersPage = () => {
     setShowForm(true);
   };
 
+  const handleDivisionChange = (division) => {
+    setSelectedDivision(division);
+    setSearchQuery('');
+  };
+
   const divisionCounts = countPlayersByDivision(players);
-  const activePlayers = filterPlayersForDivision(players, selectedDivision);
+  const divisionPlayers = filterPlayersForDivision(players, selectedDivision);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const activePlayers = normalizedQuery
+    ? divisionPlayers.filter((player) =>
+      [player.name, player.email]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(normalizedQuery))
+    )
+    : divisionPlayers;
   const selectedDivisionMeta = DIVISIONS.find((d) => d.value === selectedDivision);
 
   return (
@@ -127,11 +142,19 @@ const PlayersPage = () => {
       </div>
 
       {players.length > 0 && (
-        <DivisionTabs
-          selected={selectedDivision}
-          onChange={setSelectedDivision}
-          counts={divisionCounts}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <DivisionTabs
+            selected={selectedDivision}
+            onChange={handleDivisionChange}
+            counts={divisionCounts}
+          />
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={`Search ${selectedDivisionMeta?.label || selectedDivision} players by name or email...`}
+            className="w-full xl:max-w-md"
+          />
+        </div>
       )}
 
       {error && (
@@ -184,7 +207,16 @@ const PlayersPage = () => {
         </div>
       )}
 
-      {!loading && players.length > 0 && activePlayers.length === 0 && (
+      {!loading && players.length > 0 && activePlayers.length === 0 && normalizedQuery && (
+        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+          <p className="text-gray-600 text-lg mb-2">
+            No players match "{searchQuery.trim()}" in {selectedDivisionMeta?.label || selectedDivision}.
+          </p>
+          <p className="text-gray-500 text-sm">Try a different name or email.</p>
+        </div>
+      )}
+
+      {!loading && players.length > 0 && divisionPlayers.length === 0 && !normalizedQuery && (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <p className="text-gray-600 text-lg mb-2">
             No players in {selectedDivisionMeta?.label || selectedDivision} yet.

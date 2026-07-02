@@ -1,6 +1,7 @@
 import Button from '@/components/atoms/Button';
 import DivisionTabs from '@/components/molecules/DivisionTabs';
 import GroupAssignmentsTable from '@/components/molecules/GroupAssignmentsTable';
+import SearchInput from '@/components/molecules/SearchInput';
 import TeamCard from '@/components/molecules/TeamCard';
 import TeamCardPreview from '@/components/molecules/TeamCardPreview';
 import { buildDivisionMap, countPlayersByDivision, DEFAULT_TOURNAMENT_DIVISION, DIVISIONS, filterPlayersForDivision, getCompetitionFormatLabel } from '@/constants/divisions';
@@ -12,7 +13,7 @@ import { getEffectivePairingRules } from '@/services/teamPairingRuleService';
 import { deleteTeam, getTeams, saveTeamsForDivision, updateTeam } from '@/services/teamService';
 import { getDivisionGroups } from '@/services/tournamentService';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
-import { buildDefaultTeamName, resolveTeamDivision } from '@/utils/teamNaming';
+import { buildDefaultTeamName, normalizeTeamName, resolveTeamDivision } from '@/utils/teamNaming';
 import { buildDoublesTeamsWithPairingRules } from '@shared/tournament/teamPairing.js';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -47,6 +48,7 @@ const TeamsPage = () => {
   const [previewTeamsByDivision, setPreviewTeamsByDivision] = useState({ ...EMPTY_PREVIEW });
   const [saving, setSaving] = useState(false);
   const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
+  const [searchQuery, setSearchQuery] = useState('');
   const [divisionFormats, setDivisionFormats] = useState({ ...DEFAULT_FORMATS });
   const [divisionTournamentFormats, setDivisionTournamentFormats] = useState({ ...DEFAULT_TOURNAMENT_FORMATS });
   const [formatSaving, setFormatSaving] = useState(false);
@@ -398,7 +400,25 @@ const TeamsPage = () => {
     DIVISIONS.map((d) => [d.value, teamsByDivision(d.value).length])
   );
 
-  const activeTeams = teamsByDivision(selectedDivision);
+  const handleDivisionChange = (division) => {
+    setSelectedDivision(division);
+    setSearchQuery('');
+  };
+
+  const divisionTeams = teamsByDivision(selectedDivision);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const activeTeams = normalizedQuery
+    ? divisionTeams.filter((team) =>
+      [
+        normalizeTeamName(team.team_name, selectedDivision),
+        team.team_name,
+        team.player1_name,
+        team.player2_name,
+      ]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(normalizedQuery))
+    )
+    : divisionTeams;
 
   const getPreviewIndex = (divisionTeam) =>
     activePreviewTeams.findIndex((team) => {
@@ -466,11 +486,21 @@ const TeamsPage = () => {
         </div>
       </div>
 
-      <DivisionTabs
-        selected={selectedDivision}
-        onChange={setSelectedDivision}
-        counts={divisionTeamCounts}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <DivisionTabs
+          selected={selectedDivision}
+          onChange={handleDivisionChange}
+          counts={divisionTeamCounts}
+        />
+        {divisionTeams.length > 0 && (
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={`Search ${selectedDivisionLabel} by team or player name...`}
+            className="w-full xl:max-w-md"
+          />
+        )}
+      </div>
 
       {isAdmin && (
         <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -490,7 +520,7 @@ const TeamsPage = () => {
               <select
                 value={selectedCompetitionFormat}
                 onChange={(e) => handleFormatChange(e.target.value)}
-                disabled={formatSaving || activeTeams.length > 0}
+                disabled={formatSaving || divisionTeams.length > 0}
                 className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white disabled:opacity-60"
                 aria-label={`Competition format for ${selectedDivisionLabel}`}
               >
@@ -501,7 +531,7 @@ const TeamsPage = () => {
               <select
                 value={selectedTournamentFormat}
                 onChange={(e) => handleTournamentFormatChange(e.target.value)}
-                disabled={formatSaving || activeTeams.length > 0}
+                disabled={formatSaving || divisionTeams.length > 0}
                 className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white disabled:opacity-60"
                 aria-label={`Tournament format for ${selectedDivisionLabel}`}
               >
@@ -511,7 +541,7 @@ const TeamsPage = () => {
                   </option>
                 ))}
               </select>
-              {activeTeams.length > 0 && (
+              {divisionTeams.length > 0 && (
                 <span className="text-xs text-amber-700">Delete existing {entrantLabel} to change formats</span>
               )}
             </div>
@@ -526,7 +556,7 @@ const TeamsPage = () => {
         </div>
       )}
 
-      {!loading && activeTeams.length > 0 && divisionGroups.length === 0 && (
+      {!loading && divisionTeams.length > 0 && divisionGroups.length === 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-900">
           {isAdmin ? (
             <>
@@ -636,7 +666,7 @@ const TeamsPage = () => {
             </div>
           )}
 
-          {teams.length > 0 && activeTeams.length === 0 && (
+          {teams.length > 0 && divisionTeams.length === 0 && (
             <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
               <p className="text-gray-600 text-lg mb-2">
                 No teams in {selectedDivisionLabel}
@@ -646,6 +676,15 @@ const TeamsPage = () => {
                   ? 'Use the generate button above to create teams for this division'
                   : 'No teams are registered for this division yet.'}
               </p>
+            </div>
+          )}
+
+          {divisionTeams.length > 0 && activeTeams.length === 0 && normalizedQuery && (
+            <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+              <p className="text-gray-600 text-lg mb-2">
+                No {selectedDivisionLabel} teams match "{searchQuery.trim()}"
+              </p>
+              <p className="text-gray-500 text-sm">Search by team name or a player's name.</p>
             </div>
           )}
 

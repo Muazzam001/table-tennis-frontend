@@ -48,6 +48,7 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
       </div>
 
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        {/* 
         <div>
           <dt className="text-gray-500">Scheduled</dt>
           <dd className="font-medium text-gray-900">{formatDate(match.scheduled_date)}</dd>
@@ -55,7 +56,8 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
         <div>
           <dt className="text-gray-500">Venue</dt>
           <dd className="font-medium text-gray-900">{match.venue || 'TBD'}</dd>
-        </div>
+        </div> 
+        */}
         {match.pool && (
           <div>
             <dt className="text-gray-500">Group</dt>
