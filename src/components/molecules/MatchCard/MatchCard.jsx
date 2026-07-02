@@ -85,12 +85,13 @@ const MatchCard = ({
               </span>
             </p>
           )} */}
-
-          <div className="flex flex-wrap gap-4 items-center justify-between">
-            <p>📅 {formatDate(match.scheduled_date)}</p>
-            {match.venue && <p>📍 {match.venue}</p>}
-          </div>
-
+          
+          {isAdmin && (
+            <div className="flex flex-wrap gap-4 items-center justify-between">
+              <p>📅 {formatDate(match.scheduled_date)}</p>
+              {match.venue && <p>📍 {match.venue}</p>}
+            </div>
+          )}
         </div>
 
         {/* Action Button */}

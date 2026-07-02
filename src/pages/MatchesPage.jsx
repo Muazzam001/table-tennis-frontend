@@ -5,6 +5,7 @@ import DivisionTabs from '@/components/molecules/DivisionTabs';
 import MatchCard from '@/components/molecules/MatchCard';
 import MatchDetailPanel from '@/components/molecules/MatchDetailPanel';
 import MatchResultForm from '@/components/molecules/MatchResultForm';
+import SearchInput from '@/components/molecules/SearchInput';
 import PyramidAdminPanel from '@/components/molecules/PyramidAdminPanel/PyramidAdminPanel';
 import ScheduleWizard from '@/components/molecules/ScheduleWizard';
 import TierAssignmentPanel from '@/components/molecules/TierAssignmentPanel/TierAssignmentPanel';
@@ -80,6 +81,7 @@ const MatchesPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedRound, setSelectedRound] = useState('Qualifying');
+  const [matchSearchQuery, setMatchSearchQuery] = useState('');
   const [showResultForm, setShowResultForm] = useState(false);
   const [showMatchDetail, setShowMatchDetail] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -428,16 +430,25 @@ const MatchesPage = () => {
     openGroupStageWizard();
   };
 
+  // Client-side search within the selected division (matches by team name)
+  const normalizedMatchQuery = matchSearchQuery.trim().toLowerCase();
+  const matchMatchesQuery = (m) =>
+    !normalizedMatchQuery ||
+    [m.team1_name, m.team2_name]
+      .filter(Boolean)
+      .some((name) => String(name).toLowerCase().includes(normalizedMatchQuery));
+
   // Filter matches by division and round
-  const filteredMatches = selectedRound === 'all'
+  const filteredMatches = (selectedRound === 'all'
     ? divisionMatches
     : isTierPyramid
       ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
-      : divisionMatches.filter((m) => m.round_type === selectedRound);
+      : divisionMatches.filter((m) => m.round_type === selectedRound)
+  ).filter(matchMatchesQuery);
 
   const level1S2Matches = divisionMatches.filter((m) => m.round_type === 'S2');
   const level1Summary = summarizeLevel1Schedule(level1Matches, setupOptions?.matchCounts || {});
-  const s2RoundGroups = groupMatchesByRoundRobinRounds(level1S2Matches);
+  const s2RoundGroups = groupMatchesByRoundRobinRounds(level1S2Matches.filter(matchMatchesQuery));
 
   const qualifyingCount = divisionMatches.filter((m) => m.round_type === 'Qualifying').length;
   const activeGroupCount = selectedGroupCount ?? setupOptions?.defaultGroupCount;
@@ -877,6 +888,7 @@ const MatchesPage = () => {
             <Button type="button" size="sm" onClick={handleSaveSetConfig}>
               Save set config
             </Button>
+
             <Button type="button" size="sm" variant="outline" onClick={handleResetSetConfig}>
               Reset defaults
             </Button>
@@ -886,7 +898,10 @@ const MatchesPage = () => {
 
       <DivisionTabs
         selected={selectedDivision}
-        onChange={setSelectedDivision}
+        onChange={(division) => {
+          setSelectedDivision(division);
+          setMatchSearchQuery('');
+        }}
         counts={Object.fromEntries(
           DIVISIONS.map((d) => [d.value, teams.filter((t) => getDivision(t) === d.value).length])
         )}
@@ -1015,17 +1030,26 @@ const MatchesPage = () => {
 
       {/* Round Filter — only tabs with scheduled matches */}
       {visibleRoundTabs.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {visibleRoundTabs.map((round) => (
-            <Button
-              key={round.value}
-              onClick={() => setSelectedRound(round.value)}
-              variant={selectedRound === round.value ? 'primary' : 'outline'}
-              size="sm"
-            >
-              {round.label}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex gap-2 flex-wrap">
+            {visibleRoundTabs.map((round) => (
+              <Button
+                key={round.value}
+                onClick={() => setSelectedRound(round.value)}
+                variant={selectedRound === round.value ? 'primary' : 'outline'}
+                size="sm"
+              >
+                {round.label}
+              </Button>
+            ))}
+          </div>
+
+          <SearchInput
+            value={matchSearchQuery}
+            onChange={setMatchSearchQuery}
+            placeholder={`Search ${selectedDivisionLabel} matches by team...`}
+            className="w-full xl:max-w-md"
+          />
         </div>
       )}
 
@@ -1304,8 +1328,24 @@ const MatchesPage = () => {
           </div>
         )}
 
+      {/* No matches matched the active search */}
+      {!loading &&
+        normalizedMatchQuery &&
+        filteredMatches.length === 0 &&
+        divisionMatches.length > 0 &&
+        visibleRoundTabs.some((round) => round.value === selectedRound) && (
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <div className="text-6xl mb-4">🔍</div>
+            <p className="text-gray-600 text-lg mb-2">
+              No matches for "{matchSearchQuery.trim()}" in this round
+            </p>
+            <p className="text-gray-500 text-sm">Try a different team name or clear the search.</p>
+          </div>
+        )}
+
       {/* No matches for selected round (should be rare once empty tabs are hidden) */}
       {!loading &&
+        !normalizedMatchQuery &&
         filteredMatches.length === 0 &&
         divisionMatches.length > 0 &&
         visibleRoundTabs.some((round) => round.value === selectedRound) && (
@@ -1335,6 +1375,7 @@ const MatchesPage = () => {
               <Button type="submit" form="match-result-form" variant="primary">
                 Save Changes
               </Button>
+              
               <Button type="button" variant="outline" onClick={closeMatchModal}>
                 Cancel
               </Button>

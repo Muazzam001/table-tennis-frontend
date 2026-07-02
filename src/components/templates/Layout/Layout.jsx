@@ -4,7 +4,7 @@ const Layout = ({ children }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-11/12 mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-11/12 mx-auto lg:px-5 py-8">
         {children}
       </main>
     </div>
