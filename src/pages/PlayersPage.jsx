@@ -120,7 +120,7 @@ const PlayersPage = () => {
           <p className="text-gray-600 mt-1">
             {isAdmin
               ? `Manage tournament players (${players.length} total)`
-              : `Browse tournament players (${players.length} total) — read-only`}
+              : `Browse tournament players (${players.length} total)`}
           </p>
         </div>
         {isAdmin && (

@@ -395,7 +395,7 @@ const MatchResultForm = ({
                   Max {gamePointRules.maxSetScore} points per side.{' '} 
                   <br /> {gamePointFormat === 21
                     ? 'Deuce at 20-20 - enter final score (e.g. 21-19). Knockout: 7-0, 11-1.'
-                    : 'Deuce at 10-10 - enter final score (e.g. 11-9, 11-6). Knockout: 6-0.'}{' '}
+                    : 'Deuce at 10-10 - enter final score (e.g. 11-9, 11-6). Knockout: 6-0, 9-1.'}{' '}
                   <br /> Counts toward NRR/GD tie-breaks.
                 </p>
               </div>
