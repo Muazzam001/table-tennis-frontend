@@ -56,8 +56,7 @@ const AuthSection = ({ isAuthenticated, isAdmin, user, onLogout, onLogin, varian
         <span className="text-sm text-gray-700">{user?.username}</span>
       </div>
       <Button onClick={onLogout} variant="outline" size="sm">
-        <span className="flex xl:hidden">🏓</span>
-        <span className="hidden xl:flex">Logout</span>
+        Logout
       </Button>
     </div>
   );
