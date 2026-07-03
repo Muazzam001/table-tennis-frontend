@@ -79,14 +79,14 @@ const TournamentPage = () => {
             {isAdmin ? (
               isPyramid ? (
                 <>
-                  Tier Pyramid standings, crossover bracket, and progression — update scores on the{' '}
+                  Tier Pyramid standings, crossover bracket, and progression - update scores on the{' '}
                   <Link to="/matches" className="text-red-600 font-medium hover:underline">
                     Matches page
                   </Link>
                 </>
               ) : (
                 <>
-                  Standings, knockout bracket, and match results — schedule and update scores on the{' '}
+                  Standings, knockout bracket, and match results - schedule and update scores on the{' '}
                   <Link to="/matches" className="text-red-600 font-medium hover:underline">
                     Matches page
                   </Link>
@@ -94,14 +94,14 @@ const TournamentPage = () => {
               )
             ) : isPyramid ? (
               <>
-                Tier Pyramid standings, crossover bracket, and progression — browse match details on the{' '}
+                Tier Pyramid standings, crossover bracket, and progression - browse match details on the{' '}
                 <Link to="/matches" className="text-red-600 font-medium hover:underline">
                   Matches page
                 </Link>
               </>
             ) : (
               <>
-                Standings, knockout bracket, and match results — browse schedules and scores on the{' '}
+                Standings, knockout bracket, and match results - browse schedules and scores on the{' '}
                 <Link to="/matches" className="text-red-600 font-medium hover:underline">
                   Matches page
                 </Link>
