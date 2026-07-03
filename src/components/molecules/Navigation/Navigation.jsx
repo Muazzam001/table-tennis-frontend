@@ -5,6 +5,7 @@ import Button from '@/components/atoms/Button';
 
 const navItems = [
   { path: '/', label: 'Home', icon: '🏓' },
+  { path: '/rules', label: 'Rules', icon: '📋' },
   { path: '/players', label: 'Players', icon: '👥' },
   { path: '/teams', label: 'Teams', icon: '🤝' },
   { path: '/matches', label: 'Matches', icon: '⚔️' },
@@ -56,7 +57,7 @@ const AuthSection = ({ isAuthenticated, isAdmin, user, onLogout, onLogin, varian
         <span className="text-sm text-gray-700">{user?.username}</span>
       </div>
       <Button onClick={onLogout} variant="outline" size="sm">
-        Logout
+        Logout 
       </Button>
     </div>
   );
