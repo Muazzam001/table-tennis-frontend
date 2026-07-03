@@ -69,11 +69,20 @@ const MatchResultForm = ({
   );
   const gamePointRules = getGamePointRules(gamePointFormat);
 
+  const initialAvailability = match.is_abandoned
+    ? match.winner_team_id === match.team1_id
+      ? 'team1'
+      : match.winner_team_id === match.team2_id
+        ? 'team2'
+        : 'both'
+    : 'team1';
+
   const [formData, setFormData] = useState({
     score_team1: match.score_team1 || 0,
     score_team2: match.score_team2 || 0,
     winner_team_id: match.winner_team_id || '',
     is_abandoned: match.is_abandoned || false,
+    available_team: initialAvailability,
     abandoned_reason: match.abandoned_reason || '',
     scheduled_date: formatDateForInput(match.scheduled_date),
     venue: match.venue || '',
@@ -246,14 +255,27 @@ const MatchResultForm = ({
     const derivedWinner = team1Won ? match.team1_id : team2Won ? match.team2_id : null;
 
     if (formData.is_abandoned) {
+      // Only the available team is awarded the point. When neither team is
+      // available (or both), there is no winner and standings award both a point.
+      const abandonedWinner =
+        formData.available_team === 'team1'
+          ? match.team1_id
+          : formData.available_team === 'team2'
+            ? match.team2_id
+            : null;
+
+      if (onWinnerChange) {
+        onWinnerChange(abandonedWinner);
+      }
+
       onSubmit({
         scheduled_date: formattedDate,
         venue: formData.venue,
         score_team1: 0,
-        score_team2: 1,
+        score_team2: 0,
         set_game_scores: null,
         game_point_format: gamePointFormat,
-        winner_team_id: match.team2_id,
+        winner_team_id: abandonedWinner,
         status: 'Completed',
         is_abandoned: true,
         abandoned_reason: formData.abandoned_reason || null,
@@ -415,9 +437,56 @@ const MatchResultForm = ({
             <span className="text-sm font-medium text-gray-700">Match Abandoned/Unavailable</span>
           </label>
           <p className="text-xs text-gray-500 mt-1">
-            If checked, the opponent team will be awarded 1 point
+            The available team is awarded 1 point. If neither team is available, both teams get 1 point.
           </p>
         </div>
+
+        {formData.is_abandoned && (
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm font-medium text-gray-700 mb-2">Team availability</p>
+            <div className="space-y-2">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="available_team"
+                  value="team1"
+                  checked={formData.available_team === 'team1'}
+                  onChange={handleChange}
+                  className="mr-2 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">
+                  Only <span className="font-medium">{match.team1_name}</span> available (1 point to {match.team1_name})
+                </span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="available_team"
+                  value="team2"
+                  checked={formData.available_team === 'team2'}
+                  onChange={handleChange}
+                  className="mr-2 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">
+                  Only <span className="font-medium">{match.team2_name}</span> available (1 point to {match.team2_name})
+                </span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="available_team"
+                  value="both"
+                  checked={formData.available_team === 'both'}
+                  onChange={handleChange}
+                  className="mr-2 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">
+                  Neither team available (1 point to both teams)
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {formData.is_abandoned && (
           <Input
