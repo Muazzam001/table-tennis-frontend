@@ -55,7 +55,7 @@ const TierAssignmentPanel = ({
         </div>
       )}
 
-      <div className="overflow-x-auto max-h-80 overflow-y-auto border border-gray-100 rounded-lg">
+      <div className="overflow-x-auto max-h-90 overflow-y-auto border border-gray-100 rounded-lg">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 sticky top-0">
             <tr>

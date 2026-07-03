@@ -67,13 +67,13 @@ const RulesPage = () => {
         </div>
 
         {/* Knockout Rule */}
-        <div className="border-b bg-yellow-50 px-8 py-6">
+        <div className="border-b bg-yellow-50 px-5 lg:px-8 py-6">
           <h2 className="mb-2 text-xl font-semibold text-yellow-700">
             ⚠️ Knockout Rule
           </h2>
 
           <p className="leading-7 text-gray-700">
-            In an <strong>11-point game</strong>, a <strong>6-0 lead</strong> is
+            In an <strong>11-point game</strong>, <strong>6-0 lead</strong> and <strong>9-1 lead</strong> is
             considered a <strong>Knockout</strong>. Since a player must win by at
             least a 2-point margin, the trailing player has only five remaining
             points available and cannot recover under this tournament rule.
@@ -81,11 +81,11 @@ const RulesPage = () => {
         </div>
 
         {/* Rules */}
-        <div className="grid grid-cols-2 gap-8 p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-5 lg:p-8">
           {rules.map((section) => (
             <div
               key={section.title}
-              className="rounded-lg border border-gray-200 bg-gray-50 p-6"
+              className="rounded-lg border border-gray-200 bg-gray-50 p-4 lg:p-6"
             >
               <h2 className="mb-4 text-xl font-semibold text-blue-700">
                 {section.title}

@@ -2,6 +2,7 @@ import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
 import { getPlayerDivisionLabel } from '@/utils/playerDivision';
 import { getExpertiseBadgeVariant } from '@/utils/divisionBadge';
+import { memo } from 'react';
 
 const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
   const divisionLabel = getPlayerDivisionLabel(player);
@@ -36,4 +37,4 @@ const PlayerCard = ({ player, onEdit, onDelete, isAdmin = false }) => {
   );
 };
 
-export default PlayerCard;
+export default memo(PlayerCard);

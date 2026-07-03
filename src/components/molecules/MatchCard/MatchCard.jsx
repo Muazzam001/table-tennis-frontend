@@ -4,6 +4,7 @@ import MatchResultIcon, { getTeamRowClass } from '@/components/atoms/MatchResult
 import MatchStageBadge from '@/components/atoms/MatchStageBadge/MatchStageBadge';
 import TierBadge from '@/components/atoms/TierBadge/TierBadge';
 import { getSetCountForRound } from '@/config/matchSetConfig';
+import { memo } from 'react';
 
 // Component to display a single match card
 const MatchCard = ({
@@ -120,5 +121,5 @@ const MatchCard = ({
   );
 };
 
-export default MatchCard;
+export default memo(MatchCard);
 

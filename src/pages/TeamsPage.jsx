@@ -12,10 +12,11 @@ import { getPlayers } from '@/services/playerService';
 import { getEffectivePairingRules } from '@/services/teamPairingRuleService';
 import { deleteTeam, getTeams, saveTeamsForDivision, updateTeam } from '@/services/teamService';
 import { getDivisionGroups } from '@/services/tournamentService';
+import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
 import { buildDefaultTeamName, normalizeTeamName, resolveTeamDivision } from '@/utils/teamNaming';
 import { buildDoublesTeamsWithPairingRules } from '@shared/tournament/teamPairing.js';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 const EMPTY_PREVIEW = buildDivisionMap([]);
@@ -37,11 +38,17 @@ const getFormatRequirementText = (competitionFormat) =>
 
 const getPlayersForDivision = (players, division) => filterPlayersForDivision(players, division);
 
+const buildPlayerStats = (players) => ({
+  total: players.length,
+  countsByDivision: countPlayersByDivision(players),
+  players,
+});
+
 const TeamsPage = () => {
   const { isAdmin } = useAuth();
   // State for managing teams list (saved teams from DB)
-  const [teams, setTeams] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [teams, setTeams] = useState(() => getCached(CACHE_KEYS.teamsAll) || []);
+  const [loading, setLoading] = useState(() => !hasCached(CACHE_KEYS.teamsAll));
   const [error, setError] = useState(null);
 
   // State for preview teams per division (not saved yet)
@@ -55,23 +62,45 @@ const TeamsPage = () => {
   const [divisionGroups, setDivisionGroups] = useState([]);
   const [teamGroupMap, setTeamGroupMap] = useState({});
 
-  // State for player counts (to show requirements)
-  const [playerStats, setPlayerStats] = useState({
-    total: 0,
-    countsByDivision: buildDivisionMap(0),
-    players: [],
+  // State for player counts (to show requirements) - seeded from shared cache
+  const [playerStats, setPlayerStats] = useState(() => {
+    const cachedPlayers = getCached(CACHE_KEYS.playersAll);
+    return cachedPlayers
+      ? buildPlayerStats(cachedPlayers)
+      : { total: 0, countsByDivision: buildDivisionMap(0), players: [] };
   });
 
-  // Load teams and player stats when component mounts
-  useEffect(() => {
-    loadTeams();
-    loadPlayerStats();
-    loadDivisionFormats();
+  // Function to fetch all teams from API (silent = no spinner, background refresh)
+  const loadTeams = useCallback(async ({ silent = false } = {}) => {
+    try {
+      if (!silent) setLoading(true);
+      setError(null);
+      const data = await getTeams();
+      setCached(CACHE_KEYS.teamsAll, data);
+      setTeams(data);
+    } catch (err) {
+      setError(err.message || 'Failed to load teams');
+      console.error('Error loading teams:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadDivisionFormats = async () => {
+  // Function to load player statistics (shares the players:all cache with PlayersPage)
+  const loadPlayerStats = useCallback(async () => {
+    try {
+      const players = await getPlayers();
+      setCached(CACHE_KEYS.playersAll, players);
+      setPlayerStats(buildPlayerStats(players));
+    } catch (err) {
+      console.error('Error loading player stats:', err);
+    }
+  }, []);
+
+  const loadDivisionFormats = useCallback(async () => {
     try {
       const settings = await getDivisionSettings();
+      setCached(CACHE_KEYS.divisionSettings, settings);
       const formats = { ...DEFAULT_FORMATS };
       const tournamentFormats = { ...DEFAULT_TOURNAMENT_FORMATS };
       for (const row of settings) {
@@ -83,54 +112,45 @@ const TeamsPage = () => {
     } catch (err) {
       console.error('Error loading division formats:', err);
     }
-  };
+  }, []);
+
+  // Load teams, player stats, and formats on mount - all in parallel.
+  // Revalidate silently when data is already cached to avoid a spinner flash.
+  useEffect(() => {
+    Promise.all([
+      loadTeams({ silent: hasCached(CACHE_KEYS.teamsAll) }),
+      loadPlayerStats(),
+      loadDivisionFormats(),
+    ]);
+  }, [loadTeams, loadPlayerStats, loadDivisionFormats]);
 
   useEffect(() => {
+    let cancelled = false;
+    const groupsKey = CACHE_KEYS.divisionGroups(selectedDivision);
+    // Paint cached groups for this division immediately, then revalidate.
+    const cachedGroups = getCached(groupsKey);
+    if (cachedGroups) {
+      setDivisionGroups(cachedGroups.groups || []);
+      setTeamGroupMap(cachedGroups.teamGroupMap || {});
+    }
     const loadGroups = async () => {
       try {
         const data = await getDivisionGroups(selectedDivision);
+        setCached(groupsKey, data || {});
+        if (cancelled) return;
         setDivisionGroups(data?.groups || []);
         setTeamGroupMap(data?.teamGroupMap || {});
       } catch {
+        if (cancelled) return;
         setDivisionGroups([]);
         setTeamGroupMap({});
       }
     };
-    if (teams.length > 0) {
-      loadGroups();
-    }
-  }, [selectedDivision, teams]);
-
-  // Function to fetch all teams from API
-  const loadTeams = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getTeams();
-      setTeams(data);
-    } catch (err) {
-      setError(err.message || 'Failed to load teams');
-      console.error('Error loading teams:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Function to load player statistics
-  const loadPlayerStats = async () => {
-    try {
-      const players = await getPlayers();
-      const countsByDivision = countPlayersByDivision(players);
-
-      setPlayerStats({
-        total: players.length,
-        countsByDivision,
-        players,
-      });
-    } catch (err) {
-      console.error('Error loading player stats:', err);
-    }
-  };
+    loadGroups();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDivision]);
 
   const shuffleArray = (array) => {
     const shuffled = [...array];
@@ -312,7 +332,7 @@ const TeamsPage = () => {
       await saveTeamsForDivision(activePreviewTeams, selectedDivision);
 
       setPreviewTeamsByDivision((prev) => ({ ...prev, [selectedDivision]: [] }));
-      await loadTeams();
+      await loadTeams({ silent: true });
 
       await showSuccess(
         'Teams saved',
@@ -340,7 +360,8 @@ const TeamsPage = () => {
     }
   };
 
-  const handleSaveTeamName = async (teamId, teamName) => {
+  // Stable references so memoized TeamCards skip re-renders.
+  const handleSaveTeamName = useCallback(async (teamId, teamName) => {
     if (!teamName?.trim()) {
       setError('Team name cannot be empty');
       return;
@@ -348,15 +369,15 @@ const TeamsPage = () => {
     try {
       setError(null);
       await updateTeam(teamId, { team_name: teamName.trim() });
-      await loadTeams();
+      await loadTeams({ silent: true });
     } catch (err) {
       setError(err.message || 'Failed to update team name');
       throw err;
     }
-  };
+  }, [loadTeams]);
 
   // Handle delete team
-  const handleDelete = async (teamId) => {
+  const handleDelete = useCallback(async (teamId) => {
     const confirmed = await showConfirm({
       title: 'Delete team?',
       text: 'Are you sure you want to delete this team?',
@@ -368,12 +389,12 @@ const TeamsPage = () => {
 
     try {
       await deleteTeam(teamId);
-      loadTeams();
+      loadTeams({ silent: true });
     } catch (err) {
       setError(err.message || 'Failed to delete team');
       console.error('Error deleting team:', err);
     }
-  };
+  }, [loadTeams]);
 
   const teamsByDivision = (division) =>
     teams.filter((team) => resolveTeamDivision(team) === division);
@@ -396,8 +417,9 @@ const TeamsPage = () => {
   const activePreviewTeams = previewTeamsByDivision[selectedDivision] || [];
   const hasPreviewForSelected = activePreviewTeams.length > 0;
 
-  const divisionTeamCounts = Object.fromEntries(
-    DIVISIONS.map((d) => [d.value, teamsByDivision(d.value).length])
+  const divisionTeamCounts = useMemo(
+    () => Object.fromEntries(DIVISIONS.map((d) => [d.value, teamsByDivision(d.value).length])),
+    [teams]
   );
 
   const handleDivisionChange = (division) => {
@@ -405,20 +427,27 @@ const TeamsPage = () => {
     setSearchQuery('');
   };
 
-  const divisionTeams = teamsByDivision(selectedDivision);
+  const divisionTeams = useMemo(
+    () => teamsByDivision(selectedDivision),
+    [teams, selectedDivision]
+  );
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const activeTeams = normalizedQuery
-    ? divisionTeams.filter((team) =>
-      [
-        normalizeTeamName(team.team_name, selectedDivision),
-        team.team_name,
-        team.player1_name,
-        team.player2_name,
-      ]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(normalizedQuery))
-    )
-    : divisionTeams;
+  const activeTeams = useMemo(
+    () =>
+      normalizedQuery
+        ? divisionTeams.filter((team) =>
+            [
+              normalizeTeamName(team.team_name, selectedDivision),
+              team.team_name,
+              team.player1_name,
+              team.player2_name,
+            ]
+              .filter(Boolean)
+              .some((field) => String(field).toLowerCase().includes(normalizedQuery))
+          )
+        : divisionTeams,
+    [divisionTeams, normalizedQuery, selectedDivision]
+  );
 
   const getPreviewIndex = (divisionTeam) =>
     activePreviewTeams.findIndex((team) => {

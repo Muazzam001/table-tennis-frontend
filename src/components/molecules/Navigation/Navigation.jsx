@@ -92,7 +92,7 @@ const Navigation = () => {
   };
 
   return (
-    <nav className="bg-white shadow-md border-b border-gray-200">
+    <nav className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-11/12 mx-auto lg:px-5">
         <div className="flex justify-between items-center h-16">
           <Link to={'/'} className="flex items-center space-x-2">

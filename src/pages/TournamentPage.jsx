@@ -7,34 +7,45 @@ import { isTierPyramidFormat } from '@/constants/tournamentFormats';
 import { useAuth } from '@/contexts/AuthContext';
 import { archiveTournament } from '@/services/tournamentArchiveService';
 import { getTournamentOverview } from '@/services/tournamentService';
+import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 const TournamentPage = () => {
   const { isAdmin } = useAuth();
   const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
-  const [overview, setOverview] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [overview, setOverview] = useState(
+    () => getCached(CACHE_KEYS.tournamentOverview(DEFAULT_TOURNAMENT_DIVISION)) || null
+  );
+  const [loading, setLoading] = useState(
+    () => !hasCached(CACHE_KEYS.tournamentOverview(DEFAULT_TOURNAMENT_DIVISION))
+  );
   const [error, setError] = useState(null);
   const [archiving, setArchiving] = useState(false);
 
-  const loadOverview = async () => {
+  const loadOverview = useCallback(async ({ silent = false } = {}) => {
+    const cacheKey = CACHE_KEYS.tournamentOverview(selectedDivision);
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const data = await getTournamentOverview(selectedDivision);
+      setCached(cacheKey, data);
       setOverview(data);
     } catch (err) {
       setError(err.message || 'Failed to load tournament data');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadOverview();
   }, [selectedDivision]);
+
+  // On division change: paint cached overview instantly, then revalidate.
+  useEffect(() => {
+    const cacheKey = CACHE_KEYS.tournamentOverview(selectedDivision);
+    const cached = getCached(cacheKey);
+    if (cached) setOverview(cached);
+    loadOverview({ silent: hasCached(cacheKey) });
+  }, [selectedDivision, loadOverview]);
 
   const handleArchive = async () => {
     const confirmed = await showConfirm({

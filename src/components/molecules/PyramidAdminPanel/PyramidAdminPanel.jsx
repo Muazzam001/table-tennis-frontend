@@ -97,7 +97,7 @@ const PyramidAdminPanel = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-3 border border-gray-100 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-gray-800">Manual advancement override</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-3">
             <label className="text-sm">
               <span className="text-gray-600 block mb-1">Team</span>
               <select
@@ -200,7 +200,7 @@ const PyramidAdminPanel = ({
       </div>
 
       <div className="border-t border-gray-100 pt-4">
-        <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center justify-between gap-2 mt-auto mb">
           <h4 className="text-sm font-semibold text-gray-800">Progression log</h4>
           <div className="flex gap-2 flex-row-reverse">
             {onRefreshLog && (

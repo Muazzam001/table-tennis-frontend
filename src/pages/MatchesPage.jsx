@@ -44,9 +44,10 @@ import {
   summarizeLevel1Schedule,
 } from '@/utils/level1Matches';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
+import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
 import { derivePyramidTournamentStatus } from '@shared/tournament/formats/tierPyramid/advancement.js';
 import { filterMatchesForPyramidRound } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const getDivision = (item) => item?.division ?? null;
 
@@ -76,9 +77,9 @@ const roundHasMatches = (divisionMatches, roundValue, isPyramid) => {
 
 const MatchesPage = () => {
   const { isAdmin } = useAuth();
-  const [matches, setMatches] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [matches, setMatches] = useState(() => getCached(CACHE_KEYS.matchesAll) || []);
+  const [teams, setTeams] = useState(() => getCached(CACHE_KEYS.teamsAll) || []);
+  const [loading, setLoading] = useState(() => !hasCached(CACHE_KEYS.matchesAll));
   const [error, setError] = useState(null);
   const [selectedRound, setSelectedRound] = useState('Qualifying');
   const [matchSearchQuery, setMatchSearchQuery] = useState('');
@@ -113,15 +114,29 @@ const MatchesPage = () => {
   const courtSummary = getCourtSummary(courtConfig);
   const matchesPerWeekday = timeSlotSummary.slotsPerWeekday * courtConfig.courtCount;
 
-  const divisionTeams = teams.filter(t => getDivision(t) === selectedDivision);
-  const divisionMatches = matches.filter(m => getDivision(m) === selectedDivision);
+  const divisionTeams = useMemo(
+    () => teams.filter((t) => getDivision(t) === selectedDivision),
+    [teams, selectedDivision]
+  );
+  const divisionMatches = useMemo(
+    () => matches.filter((m) => getDivision(m) === selectedDivision),
+    [matches, selectedDivision]
+  );
   const selectedTournamentFormat = divisionTournamentFormats[selectedDivision] || DEFAULT_TOURNAMENT_FORMAT;
   const selectedCompetitionFormat = divisionCompetitionFormats[selectedDivision] || 'doubles';
   const isSinglesDivision = selectedCompetitionFormat === 'singles';
   const isTierPyramid = isTierPyramidFormat(selectedTournamentFormat) || setupOptions?.format === 'tier-pyramid';
-  const level1Matches = divisionMatches.filter((m) => m.round_type === 'S1' || m.round_type === 'S2');
-  const teamTierMap = Object.fromEntries(
-    (pyramidTierState?.teams || divisionTeams).map((t) => [t.id, tierAssignments[t.id] ?? t.tier])
+  const level1Matches = useMemo(
+    () => divisionMatches.filter((m) => m.round_type === 'S1' || m.round_type === 'S2'),
+    [divisionMatches]
+  );
+  // Passed to every MatchCard — memoized so a stable reference lets React.memo skip cards.
+  const teamTierMap = useMemo(
+    () =>
+      Object.fromEntries(
+        (pyramidTierState?.teams || divisionTeams).map((t) => [t.id, tierAssignments[t.id] ?? t.tier])
+      ),
+    [pyramidTierState, divisionTeams, tierAssignments]
   );
   const pyramidStatus = isTierPyramid ? derivePyramidTournamentStatus(divisionMatches) : null;
   const pyramidAdminTeams = (pyramidTierState?.teams || divisionTeams).map((t) => ({
@@ -186,10 +201,33 @@ const MatchesPage = () => {
     divisionMatches.filter((m) => m.round_type === 'Final').length === 0 &&
     (semiFinalsComplete || (skipsSemiFinals && quarterFinalMatches.length === 2 && quarterFinalsComplete));
 
-  // Load data when division changes
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    try {
+      // Only show the full-screen spinner on a true cold load. When we already
+      // have cached data we revalidate silently to avoid a UI flash.
+      if (!silent) setLoading(true);
+      setError(null);
+
+      // getMatches()/getTeams() with no division return every division in a
+      // single query each (2 requests total), then we filter client-side.
+      const [allMatches, allTeams] = await Promise.all([getMatches(), getTeams()]);
+
+      setCached(CACHE_KEYS.matchesAll, allMatches);
+      setCached(CACHE_KEYS.teamsAll, allTeams);
+      setMatches(allMatches);
+      setTeams(allTeams);
+    } catch (err) {
+      setError(err.message || 'Failed to load data');
+      console.error('Error loading data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load on mount. If cache is warm, paint it immediately and revalidate silently.
   useEffect(() => {
-    loadData(selectedDivision);
-  }, [selectedDivision]);
+    loadData({ silent: hasCached(CACHE_KEYS.matchesAll) });
+  }, [loadData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,9 +237,11 @@ const MatchesPage = () => {
       setSetupOptions(null);
       setSelectedGroupCount(null);
       try {
-        const [setup, settingsRows] = await Promise.all([
+        // Fetch setup, settings, and potential pyramid tiers all in parallel
+        const [setup, settingsRows, pyramidTiersResult] = await Promise.all([
           getTournamentSetup(selectedDivision, { timeSlotConfig, courtConfig }),
           getDivisionSettings(),
+          getPyramidTiers(selectedDivision).catch(() => null), // Pre-fetch, may not be needed
         ]);
         const formats = buildDivisionMap(DEFAULT_TOURNAMENT_FORMAT);
         const competitionFormats = buildDivisionMap('doubles');
@@ -220,7 +260,8 @@ const MatchesPage = () => {
         );
 
         if (isTierPyramidFormat(formats[selectedDivision] || setup?.format)) {
-          const tierData = await getPyramidTiers(selectedDivision);
+          // Use pre-fetched tier data if pyramid format
+          const tierData = pyramidTiersResult || (await getPyramidTiers(selectedDivision));
           if (!cancelled) {
             setPyramidTierState(tierData);
             const map = {};
@@ -353,7 +394,7 @@ const MatchesPage = () => {
           throw new Error(`Schedule was created for ${schedule.division} instead of ${selectedDivisionLabel}.`);
         }
 
-        await loadData(selectedDivision);
+        await loadData({ silent: true });
 
         let message = scheduleWizard.isTierPyramid
           ? `${selectedDivisionLabel}: ${schedule.matches.length} Level 1 matches created (S1 + S2). Later levels auto-generate as you enter results.`
@@ -395,7 +436,7 @@ const MatchesPage = () => {
         configuredTimeSlots,
         configuredCourts
       );
-      await loadData();
+      await loadData({ silent: true });
       const matchesCreated = result?.data?.matches?.length || result?.matches?.length || 0;
       await showSuccess('Knockout scheduled', result?.message || `${handler.label} generated! ${matchesCreated} match(es) created.`);
       closeScheduleWizard();
@@ -406,25 +447,6 @@ const MatchesPage = () => {
     }
   };
 
-  const loadData = async (division = selectedDivision) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [matchesData, teamsData] = await Promise.all([
-        getMatches(division),
-        getTeams(division),
-      ]);
-      setMatches(matchesData);
-      setTeams(teamsData);
-    } catch (err) {
-      setError(err.message || 'Failed to load data');
-      console.error('Error loading data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
   // Generate match schedule — opens wizard
   const handleGenerateSchedule = () => {
     openGroupStageWizard();
@@ -432,23 +454,36 @@ const MatchesPage = () => {
 
   // Client-side search within the selected division (matches by team name)
   const normalizedMatchQuery = matchSearchQuery.trim().toLowerCase();
-  const matchMatchesQuery = (m) =>
-    !normalizedMatchQuery ||
-    [m.team1_name, m.team2_name]
-      .filter(Boolean)
-      .some((name) => String(name).toLowerCase().includes(normalizedMatchQuery));
+  const matchMatchesQuery = useCallback(
+    (m) =>
+      !normalizedMatchQuery ||
+      [m.team1_name, m.team2_name]
+        .filter(Boolean)
+        .some((name) => String(name).toLowerCase().includes(normalizedMatchQuery)),
+    [normalizedMatchQuery]
+  );
 
   // Filter matches by division and round
-  const filteredMatches = (selectedRound === 'all'
-    ? divisionMatches
-    : isTierPyramid
-      ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
-      : divisionMatches.filter((m) => m.round_type === selectedRound)
-  ).filter(matchMatchesQuery);
+  const filteredMatches = useMemo(
+    () =>
+      (selectedRound === 'all'
+        ? divisionMatches
+        : isTierPyramid
+          ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
+          : divisionMatches.filter((m) => m.round_type === selectedRound)
+      ).filter(matchMatchesQuery),
+    [divisionMatches, selectedRound, isTierPyramid, matchMatchesQuery]
+  );
 
-  const level1S2Matches = divisionMatches.filter((m) => m.round_type === 'S2');
+  const level1S2Matches = useMemo(
+    () => divisionMatches.filter((m) => m.round_type === 'S2'),
+    [divisionMatches]
+  );
   const level1Summary = summarizeLevel1Schedule(level1Matches, setupOptions?.matchCounts || {});
-  const s2RoundGroups = groupMatchesByRoundRobinRounds(level1S2Matches.filter(matchMatchesQuery));
+  const s2RoundGroups = useMemo(
+    () => groupMatchesByRoundRobinRounds(level1S2Matches.filter(matchMatchesQuery)),
+    [level1S2Matches, matchMatchesQuery]
+  );
 
   const qualifyingCount = divisionMatches.filter((m) => m.round_type === 'Qualifying').length;
   const activeGroupCount = selectedGroupCount ?? setupOptions?.defaultGroupCount;
@@ -463,18 +498,18 @@ const MatchesPage = () => {
     qualifyingCount > 0 &&
     qualifyingCount !== expectedQualifyingMatches;
 
-  // Handle update result (admin only)
-  const handleUpdateResult = (match) => {
+  // Stable handlers passed to memoized MatchCards so cards skip re-renders.
+  const handleUpdateResult = useCallback((match) => {
     setSelectedMatch(match);
     setShowMatchDetail(false);
     setShowResultForm(true);
-  };
+  }, []);
 
-  const handleViewMatch = (match) => {
+  const handleViewMatch = useCallback((match) => {
     setSelectedMatch(match);
     setShowResultForm(false);
     setShowMatchDetail(true);
-  };
+  }, []);
 
   const closeMatchModal = () => {
     setShowResultForm(false);
@@ -581,15 +616,8 @@ const MatchesPage = () => {
       // Wait a brief moment to ensure database transaction is complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Reload matches to show updated results
-      const [matchesData, teamsData] = await Promise.all([
-        getMatches(selectedDivision),
-        getTeams(selectedDivision),
-      ]);
-
-      // Update matches and teams state
-      setMatches(matchesData);
-      setTeams(teamsData);
+      // Reload all divisions so tab counts stay accurate
+      await loadData({ silent: true });
 
       // Log for debugging
       console.log('Match result saved');
@@ -639,7 +667,7 @@ const MatchesPage = () => {
         gamePointsPerSet: setConfig.gamePointsPerSet,
       });
 
-      await loadData(selectedDivision);
+      await loadData({ silent: true });
       if (isTierPyramid && level1Matches.length > 0) {
         await loadProgressionLog(selectedDivision);
       }
@@ -742,7 +770,7 @@ const MatchesPage = () => {
       setPyramidAdminSaving(true);
       setError(null);
       await overridePyramidAdvancement(selectedDivision, updates, notes);
-      await loadData(selectedDivision);
+      await loadData({ silent: true });
       await loadProgressionLog(selectedDivision);
       const tierData = await getPyramidTiers(selectedDivision);
       setPyramidTierState(tierData);
@@ -759,7 +787,7 @@ const MatchesPage = () => {
       setPyramidAdminSaving(true);
       setError(null);
       const result = await regeneratePyramidStage(selectedDivision, fromStage);
-      await loadData(selectedDivision);
+      await loadData({ silent: true });
       await loadProgressionLog(selectedDivision);
       const tierData = await getPyramidTiers(selectedDivision);
       setPyramidTierState(tierData);
@@ -775,21 +803,29 @@ const MatchesPage = () => {
     }
   };
 
-  const groupPools = isTierPyramid
-    ? [...new Set(level1Matches.filter((m) => m.round_type === 'S1' && m.pool).map((m) => m.pool))].sort()
-    : [
-      ...new Set(
-        divisionMatches
-          .filter((m) => m.round_type === 'Qualifying' && m.pool)
-          .map((m) => m.pool)
-      ),
-    ].sort();
-  const qualifyingMatchesByPool = groupPools.reduce((acc, pool) => {
-    acc[pool] = filteredMatches.filter((m) =>
-      isTierPyramid ? m.round_type === 'S1' && m.pool === pool : m.round_type === 'Qualifying' && m.pool === pool
-    );
-    return acc;
-  }, {});
+  const groupPools = useMemo(
+    () =>
+      isTierPyramid
+        ? [...new Set(level1Matches.filter((m) => m.round_type === 'S1' && m.pool).map((m) => m.pool))].sort()
+        : [
+          ...new Set(
+            divisionMatches
+              .filter((m) => m.round_type === 'Qualifying' && m.pool)
+              .map((m) => m.pool)
+          ),
+        ].sort(),
+    [isTierPyramid, level1Matches, divisionMatches]
+  );
+  const qualifyingMatchesByPool = useMemo(
+    () =>
+      groupPools.reduce((acc, pool) => {
+        acc[pool] = filteredMatches.filter((m) =>
+          isTierPyramid ? m.round_type === 'S1' && m.pool === pool : m.round_type === 'Qualifying' && m.pool === pool
+        );
+        return acc;
+      }, {}),
+    [groupPools, filteredMatches, isTierPyramid]
+  );
 
   const handleSetConfigChange = (roundType, value) => {
     setSetConfig((prev) => ({
@@ -840,31 +876,33 @@ const MatchesPage = () => {
 
       {isAdmin && (
         <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-          <div>
-            <h3 className="font-semibold text-gray-900">Match configuration</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Configure sets per round and game length (11 or 21 points). Saved in this browser for
-              scoring and tie-break rules.
-            </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div>
+              <h3 className="font-semibold text-gray-900">Match configuration</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Configure sets per round and game length (11 or 21 points). Saved in this browser for
+                scoring and tie-break rules.
+              </p>
+            </div>
+
+            <label className="flex gap-3 text-sm text-gray-700">
+              <span className="block mb-1">Points per game</span>
+              <select
+                value={setConfig.gamePointsPerSet ?? 11}
+                onChange={(e) => handleGamePointsChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                {GAME_POINT_OPTIONS.map((points) => (
+                  <option key={points} value={points}>
+                    {points}-point games
+                    {points === 11 ? ' (6-0 knockout)' : ' (7-0 / 11-1 knockout)'}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          <label className="block text-sm text-gray-700 max-w-xs">
-            <span className="block mb-1">Points per game</span>
-            <select
-              value={setConfig.gamePointsPerSet ?? 11}
-              onChange={(e) => handleGamePointsChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              {GAME_POINT_OPTIONS.map((points) => (
-                <option key={points} value={points}>
-                  {points}-point games
-                  {points === 11 ? ' (6-0 knockout)' : ' (7-0 / 11-1 knockout)'}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-6 gap-3">
             {editableRounds.map((roundType) => (
               <label key={roundType} className="text-sm text-gray-700">
                 <span className="block mb-1">{getMatchSetRoundLabel(roundType)}</span>
@@ -903,7 +941,12 @@ const MatchesPage = () => {
           setMatchSearchQuery('');
         }}
         counts={Object.fromEntries(
-          DIVISIONS.map((d) => [d.value, teams.filter((t) => getDivision(t) === d.value).length])
+          DIVISIONS.map((d) => {
+            const divisionMatches = matches.filter((m) => getDivision(m) === d.value);
+            const completedCount = divisionMatches.filter((m) => m.status === 'Completed').length;
+            const totalCount = divisionMatches.length;
+            return [d.value, totalCount > 0 ? `${completedCount}/${totalCount}` : '0'];
+          })
         )}
       />
 
@@ -1375,7 +1418,7 @@ const MatchesPage = () => {
               <Button type="submit" form="match-result-form" variant="primary">
                 Save Changes
               </Button>
-              
+
               <Button type="button" variant="outline" onClick={closeMatchModal}>
                 Cancel
               </Button>
