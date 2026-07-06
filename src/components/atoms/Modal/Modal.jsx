@@ -25,7 +25,7 @@ const Modal = ({
         className={`bg-white rounded-lg ${maxWidth} w-full max-h-[90vh] shadow-xl flex flex-col overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200 shrink-0">
+        <header className="flex items-start justify-between gap-4 px-5 py-3 border-b border-gray-200 shrink-0">
           <div className="min-w-0">
             {title && (
               <h2 id="modal-title" className="text-xl font-semibold text-gray-900">
@@ -55,10 +55,10 @@ const Modal = ({
           )}
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">{children}</div>
+        <div className="flex-1 overflow-y-auto  px-5 py-3 min-h-0">{children}</div>
 
         {footer && (
-          <footer className="px-6 py-4 border-t border-gray-200 shrink-0 bg-white">{footer}</footer>
+          <footer className=" px-5 py-3 border-t border-gray-200 shrink-0 bg-white">{footer}</footer>
         )}
       </div>
     </div>

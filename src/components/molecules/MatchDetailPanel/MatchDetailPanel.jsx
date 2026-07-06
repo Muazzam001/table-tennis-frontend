@@ -33,12 +33,12 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <MatchStageBadge match={match} />
-        <Badge variant={isCompleted ? 'success' : 'warning'}>{match.status}</Badge>
-      </div>
+      <div className="p-4 bg-gray-50 rounded-lg flex flex-wrap items-center justify-between gap-2">
+        <div className="w-full flex flex-wrap items-center justify-between gap-2">
+          <MatchStageBadge match={match} />
+          <Badge variant={isCompleted ? 'success' : 'warning'}>{match.status}</Badge>
+        </div>
 
-      <div className="p-4 bg-gray-50 rounded-lg space-y-1">
         <p className="text-lg font-semibold text-gray-900">
           {match.team1_name} vs {match.team2_name}
         </p>
@@ -59,13 +59,13 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
         </div> 
         */}
         {match.pool && (
-          <div>
+          <div className="flex items-center justify-between gap-2 p-1 bg-gray-100 rounded-lg">
             <dt className="text-gray-500">Group</dt>
             <dd className="font-medium text-gray-900">Pool {match.pool}</dd>
           </div>
         )}
         {match.division && (
-          <div>
+          <div className="flex items-center justify-between gap-2 p-1 bg-gray-100 rounded-lg">
             <dt className="text-gray-500">Division</dt>
             <dd className="font-medium text-gray-900">{match.division}</dd>
           </div>
@@ -81,14 +81,7 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
 
       {hasResult && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-semibold text-gray-900">Result</h4>
-            <p className="text-sm font-medium text-gray-700">
-              Sets: {match.score_team1 ?? 0} - {match.score_team2 ?? 0}
-            </p>
-          </div>
-
-          <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
             <div
               className={`flex items-center justify-between gap-2 p-3 rounded-lg border ${getTeamRowClass(
                 team1Won,
@@ -98,6 +91,14 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
               <span className="font-medium text-gray-900">{match.team1_name}</span>
               <MatchResultIcon won={team1Won} lost={team2Won} />
             </div>
+
+            <div className="flex flex-col items-center justify-between">
+              <h4 className="font-semibold text-gray-900">Result</h4>
+              <p className="text-sm font-medium text-gray-700">
+                Sets: {match.score_team1 ?? 0} - {match.score_team2 ?? 0}
+              </p>
+            </div>
+
             <div
               className={`flex items-center justify-between gap-2 p-3 rounded-lg border ${getTeamRowClass(
                 team2Won,
