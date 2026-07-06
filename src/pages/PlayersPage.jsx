@@ -12,28 +12,26 @@ import {
 } from '@/constants/divisions';
 import { useAuth } from '@/contexts/AuthContext';
 import { createPlayer, deletePlayer, getPlayers, updatePlayer } from '@/services/playerService';
+import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
 import { showConfirm } from '@/utils/sweetAlert';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PlayersPage = () => {
   const { isAdmin } = useAuth();
-  const [players, setPlayers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [players, setPlayers] = useState(() => getCached(CACHE_KEYS.playersAll) || []);
+  const [loading, setLoading] = useState(() => !hasCached(CACHE_KEYS.playersAll));
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [selectedDivision, setSelectedDivision] = useState(DEFAULT_TOURNAMENT_DIVISION);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    loadPlayers();
-  }, []);
-
-  const loadPlayers = async () => {
+  const loadPlayers = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const data = await getPlayers();
+      setCached(CACHE_KEYS.playersAll, data);
       setPlayers(data);
     } catch (err) {
       setError(err.message || 'Failed to load players');
@@ -41,7 +39,12 @@ const PlayersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Paint cached players instantly on revisit, revalidate silently in background.
+  useEffect(() => {
+    loadPlayers({ silent: hasCached(CACHE_KEYS.playersAll) });
+  }, [loadPlayers]);
 
   const handleSubmit = async (formData) => {
     try {
@@ -60,12 +63,13 @@ const PlayersPage = () => {
     }
   };
 
-  const handleEdit = (player) => {
+  // Stable references so memoized PlayerCards skip re-renders.
+  const handleEdit = useCallback((player) => {
     setEditingPlayer(player);
     setShowForm(true);
-  };
+  }, []);
 
-  const handleDelete = async (playerId) => {
+  const handleDelete = useCallback(async (playerId) => {
     const confirmed = await showConfirm({
       title: 'Delete player?',
       text: 'Are you sure you want to delete this player?',
@@ -82,7 +86,7 @@ const PlayersPage = () => {
       setError(err.message || 'Failed to delete player');
       console.error('Error deleting player:', err);
     }
-  };
+  }, [loadPlayers]);
 
   const handleCancel = () => {
     setShowForm(false);
@@ -100,16 +104,23 @@ const PlayersPage = () => {
     setSearchQuery('');
   };
 
-  const divisionCounts = countPlayersByDivision(players);
-  const divisionPlayers = filterPlayersForDivision(players, selectedDivision);
+  const divisionCounts = useMemo(() => countPlayersByDivision(players), [players]);
+  const divisionPlayers = useMemo(
+    () => filterPlayersForDivision(players, selectedDivision),
+    [players, selectedDivision]
+  );
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const activePlayers = normalizedQuery
-    ? divisionPlayers.filter((player) =>
-      [player.name, player.email]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(normalizedQuery))
-    )
-    : divisionPlayers;
+  const activePlayers = useMemo(
+    () =>
+      normalizedQuery
+        ? divisionPlayers.filter((player) =>
+            [player.name, player.email]
+              .filter(Boolean)
+              .some((field) => String(field).toLowerCase().includes(normalizedQuery))
+          )
+        : divisionPlayers,
+    [divisionPlayers, normalizedQuery]
+  );
   const selectedDivisionMeta = DIVISIONS.find((d) => d.value === selectedDivision);
 
   return (

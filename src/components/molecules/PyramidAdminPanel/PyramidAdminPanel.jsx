@@ -7,6 +7,7 @@ const PYRAMID_STAGES = [
   { value: 'registered', label: 'Registered' },
   { value: 'S1', label: 'S1' },
   { value: 'S2', label: 'S2' },
+  { value: 'L1B', label: 'Level 1B' },
   { value: 'L2', label: 'Level 2' },
   { value: 'L3', label: 'Level 3' },
   { value: 'final', label: 'Final' },
@@ -22,7 +23,8 @@ const PYRAMID_STATUSES = [
 ];
 
 const REGENERATE_STAGES = [
-  { value: 'Level 1', label: 'Level 1 (S1 + S2)' },
+  { value: 'Level 1', label: 'Level 1 (S1 + S3)' },
+  { value: 'Level 1B', label: 'Level 1B' },
   { value: 'Level 2', label: 'Level 2' },
   { value: 'Level 3', label: 'Level 3' },
   { value: 'Final', label: 'Final' },
@@ -37,6 +39,7 @@ const PyramidAdminPanel = ({
   onRefreshLog,
   divisionLabel = '',
   tournamentStatus = '',
+  level1bStatus = '',
   saving = false,
 }) => {
   const [selectedTeamId, setSelectedTeamId] = useState('');
@@ -91,13 +94,16 @@ const PyramidAdminPanel = ({
           {tournamentStatus && (
             <span className="ml-2 text-gray-500">Current status: {tournamentStatus}</span>
           )}
+          {level1bStatus && (
+            <span className="ml-2 text-gray-500">Level 1B gate: {level1bStatus}</span>
+          )}
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-3 border border-gray-100 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-gray-800">Manual advancement override</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-3">
             <label className="text-sm">
               <span className="text-gray-600 block mb-1">Team</span>
               <select
@@ -200,7 +206,7 @@ const PyramidAdminPanel = ({
       </div>
 
       <div className="border-t border-gray-100 pt-4">
-        <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center justify-between gap-2 mt-auto mb">
           <h4 className="text-sm font-semibold text-gray-800">Progression log</h4>
           <div className="flex gap-2 flex-row-reverse">
             {onRefreshLog && (

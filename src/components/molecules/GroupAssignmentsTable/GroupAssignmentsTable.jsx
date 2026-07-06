@@ -10,7 +10,7 @@ const GroupAssignmentsTable = ({ groups = [], division, compact = false }) => {
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
         <h3 className="font-semibold text-gray-900">
-          Group assignments{division ? ` — ${division} Division` : ''}
+          Group assignments{division ? ` - ${division} Division` : ''}
         </h3>
         {!compact && (
           <p className="text-sm text-gray-600 mt-0.5">

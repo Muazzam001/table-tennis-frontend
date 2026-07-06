@@ -4,8 +4,9 @@ import {
 } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
 
 const STAGE_META = {
-  S1: { label: 'S1', subtitle: 'Tier 2 & 3 groups', accent: 'border-green-300 bg-green-50' },
-  S2: { label: 'S2', subtitle: 'Tier 1 round-robin', accent: 'border-blue-300 bg-blue-50' },
+  S1: { label: 'Level 1A', subtitle: 'Tier 2 & 3 groups', accent: 'border-green-300 bg-green-50' },
+  L1B: { label: 'Level 1B', subtitle: '8 → 4 cross-group', accent: 'border-teal-300 bg-teal-50' },
+  S2: { label: 'S3', subtitle: 'Tier 1 round-robin', accent: 'border-blue-300 bg-blue-50' },
   L2: { label: 'Level 2', subtitle: 'Qualifying', accent: 'border-amber-300 bg-amber-50' },
   L3: { label: 'Level 3', subtitle: 'Crossover', accent: 'border-red-300 bg-red-50' },
   SF: { label: 'Semi Finals', subtitle: '4 → 2', accent: 'border-orange-300 bg-orange-50' },
@@ -27,6 +28,9 @@ export function buildPyramidBracketView(overview) {
   const entrantMap = Object.fromEntries(entrants.map((e) => [e.id, e]));
 
   const s1Matches = matches.filter((m) => m.round_type === 'S1');
+  const l1bMatches = matches
+    .filter((m) => m.round_type === 'Level 1B')
+    .sort((a, b) => (a.stage_sequence ?? 0) - (b.stage_sequence ?? 0));
   const s2Matches = matches.filter((m) => m.round_type === 'S2');
   const l2Matches = matches
     .filter((m) => m.round_type === 'Level 2')
@@ -57,6 +61,7 @@ export function buildPyramidBracketView(overview) {
   return {
     stages: STAGE_META,
     s1: { groups: s1Groups, matches: s1Matches.map(enrich) },
+    l1b: { matches: l1bMatches.map(enrich), standings: overview?.pyramid?.l1bStandings || [] },
     s2: { matches: s2Matches.map(enrich), standings: overview?.pyramid?.s2Standings || [] },
     l2: { matches: l2Matches.map(enrich) },
     l3: { matches: l3Matches.map(enrich) },

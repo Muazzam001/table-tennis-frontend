@@ -11,6 +11,7 @@ import PyramidBracket from '../PyramidBracket/PyramidBracket';
 const PYRAMID_RESULT_ROUNDS = [
   'S1',
   'S2',
+  'Level 1B',
   'Level 2',
   'Level 3',
   'Semi Final',
@@ -59,7 +60,7 @@ const TournamentResultsPanel = ({
   const [activeTab, setActiveTab] = useState('standings');
 
   const isPyramid = isTierPyramidFormat(overview?.format || overview?.tournament_format);
-  const qualifiersCount = overview?.config?.qualifiersPerGroup || (isPyramid ? 1 : 2);
+  const qualifiersCount = overview?.config?.qualifiersPerGroup || (isPyramid ? 2 : 2);
   const isSingleGroup = overview?.config?.isSingleGroup || overview?.format === 'single-group';
   const teamCount = overview?.config?.participantCount || overview?.config?.tier1Count + overview?.config?.tier2Count + overview?.config?.tier3Count || 0;
   const standings = overview?.standings || {};
@@ -73,6 +74,8 @@ const TournamentResultsPanel = ({
   const hasGroupStage = isPyramid ? pyramidMatches.some((m) => m.round_type === 'S1') : qualifyingMatches.length > 0;
   const hasKnockout = isPyramid ? pyramidMatches.length > 0 : knockoutMatches.length > 0;
   const s2Standings = overview?.pyramid?.s2Standings || [];
+  const l1bStandings = overview?.pyramid?.l1bStandings || [];
+  const level1bStatus = overview?.pyramid?.level1bStatus || '';
   const progressionLog = overview?.pyramid?.progressionLog || [];
 
   const formatSummary = (() => {
@@ -175,6 +178,9 @@ const TournamentResultsPanel = ({
           {isPyramid && overview?.status && (
             <span className="ml-2">· Status: {overview.status}</span>
           )}
+          {isPyramid && level1bStatus && (
+            <span className="ml-2">· Level 1B: {level1bStatus}</span>
+          )}
         </div>
       )}
 
@@ -202,7 +208,17 @@ const TournamentResultsPanel = ({
             variant={activeTab === 'standings' ? 'primary' : 'outline'}
             size="sm"
           >
-            {isPyramid ? 'S1 Standings' : 'Group Standings'}
+            {isPyramid ? 'Level 1A Standings' : 'Group Standings'}
+          </Button>
+        )}
+
+        {isPyramid && l1bStandings.length > 0 && (
+          <Button
+            onClick={() => setActiveTab('l1b')}
+            variant={activeTab === 'l1b' ? 'primary' : 'outline'}
+            size="sm"
+          >
+            Level 1B Rankings
           </Button>
         )}
 
@@ -212,7 +228,7 @@ const TournamentResultsPanel = ({
             variant={activeTab === 's2' ? 'primary' : 'outline'}
             size="sm"
           >
-            S2 Standings
+            S3 Standings
           </Button>
         )}
 
@@ -257,10 +273,20 @@ const TournamentResultsPanel = ({
               groupId={groupId}
               standings={standings[groupId] || []}
               qualifiersCount={qualifiersCount}
-              qualifierLabel={isPyramid ? 'Advances to Level 2' : undefined}
+              qualifierLabel={isPyramid ? 'Top 2 → Level 1B' : undefined}
             />
           ))}
         </div>
+      )}
+
+      {activeTab === 'l1b' && isPyramid && (
+        <GroupStandingsTable
+          groupId="Level 1B"
+          standings={l1bStandings}
+          qualifiersCount={4}
+          qualifierLabel="Top 4 → Level 2"
+          showSourceGroup
+        />
       )}
 
       {activeTab === 's2' && isPyramid && (

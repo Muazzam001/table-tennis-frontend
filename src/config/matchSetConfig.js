@@ -19,6 +19,7 @@ export const MATCH_SET_ROUND_LABELS = {
   'Third Place': 'Third Place',
   Final: 'Final',
   'Level 1': 'Level 1 (S1 Groups + S2 Tier 1)',
+  'Level 1B': 'Level 1B',
   'Level 2': 'Level 2',
   'Level 3': 'Level 3',
 };
@@ -31,7 +32,7 @@ export const GROUP_STAGE_SET_ROUNDS = [
   'Final',
 ];
 
-export const TIER_PYRAMID_SET_ROUNDS = ['Level 1', 'Level 2', 'Level 3', 'Semi Final', 'Third Place', 'Final'];
+export const TIER_PYRAMID_SET_ROUNDS = ['Level 1', 'Level 1B', 'Level 2', 'Level 3', 'Semi Final', 'Third Place', 'Final'];
 
 export { GAME_POINT_OPTIONS, DEFAULT_GAME_POINTS_PER_SET, DEFAULT_SET_COUNTS, resolveSetConfigKey };
 

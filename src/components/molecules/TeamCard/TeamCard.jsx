@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
 import TeamNameEditor from '../TeamNameEditor/TeamNameEditor';
@@ -137,4 +137,4 @@ const TeamCard = ({ team, groupId, onDelete, onSaveName, isAdmin = false, isSing
   );
 };
 
-export default TeamCard;
+export default memo(TeamCard);

@@ -6,7 +6,13 @@ const formatGD = (value) => {
   return formatted;
 };
 
-const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2, qualifierLabel }) => (
+const GroupStandingsTable = ({
+  groupId,
+  standings,
+  qualifiersCount = 2,
+  qualifierLabel,
+  showSourceGroup = false,
+}) => (
   <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
     <h3 className="text-xl font-bold text-gray-900 mb-4">Group {groupId} Standings</h3>
     <div className="overflow-x-auto">
@@ -14,6 +20,7 @@ const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2, qualifie
         <thead>
           <tr className="border-b border-gray-200">
             <th className="text-left p-2">Rank</th>
+            {showSourceGroup && <th className="text-left p-2">Source</th>}
             <th className="text-left p-2">Team</th>
             <th className="text-center p-2">P</th>
             <th className="text-center p-2">W</th>
@@ -32,6 +39,13 @@ const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2, qualifie
                 className={(team.matches_played > 0 && team.rank <= qualifiersCount) ? 'bg-green-50' : ''}
               >
                 <td className="p-2 font-semibold">{team.rank}</td>
+                {showSourceGroup && (
+                  <td className="p-2 text-gray-600">
+                    {team.sourceGroup
+                      ? `G${team.sourceGroup}-${team.groupRank ?? ''}`
+                      : '—'}
+                  </td>
+                )}
                 <td className="p-2 font-medium">{team.team_name}</td>
                 <td className="p-2 text-center">{team.matches_played || 0}</td>
                 <td className="p-2 text-center">{team.matches_won || 0}</td>
@@ -44,7 +58,7 @@ const GroupStandingsTable = ({ groupId, standings, qualifiersCount = 2, qualifie
             ))
           ) : (
             <tr>
-              <td colSpan="7" className="p-4 text-center text-gray-500">
+              <td colSpan={showSourceGroup ? 8 : 7} className="p-4 text-center text-gray-500">
                 No standings yet
               </td>
             </tr>

@@ -45,13 +45,19 @@ const HomePage = () => {
       setError(null);
 
       console.log('🔄 Loading stats...', { forceReload });
-      const statsData = await getDashboardStats();
+
+      // Fire stats, teams, and all division groups in parallel — no sequential waterfall
+      const divisionValues = DIVISIONS.map((d) => d.value);
+      const [statsData, allTeams, ...rawGroupResults] = await Promise.all([
+        getDashboardStats(),
+        getTeams().catch(() => []),
+        ...divisionValues.map((division) =>
+          getDivisionGroups(division).catch(() => ({ groups: [] }))
+        ),
+      ]);
+
       console.log('📦 Stats data received:', JSON.stringify(statsData, null, 2));
 
-      // getDashboardStats now returns the data directly: { totalPlayers: ..., totalTeams: ..., ... }
-      // No need for nested extraction
-
-      // Always create a new stats object to ensure React detects the change
       const newStats = {
         totalPlayers: Number(statsData.totalPlayers) || 0,
         totalTeams: Number(statsData.totalTeams) || 0,
@@ -63,15 +69,8 @@ const HomePage = () => {
       };
 
       console.log('📊 New stats to set:', newStats);
-      console.log('📊 Current stats before update:', stats);
 
-      // Always update stats, even if values are 0
-      // Use direct setState to ensure React detects the change
       setStats(newStats);
-
-      // Force a re-render by updating a timestamp
-      const updateKey = Date.now();
-      console.log('🔄 Stats state updated with key:', updateKey);
 
       const hasData = (newStats.totalPlayers || 0) > 0 || (newStats.totalTeams || 0) > 0;
       if (hasData) {
@@ -82,37 +81,27 @@ const HomePage = () => {
         console.log('⚠️ No data found in stats response');
       }
 
-      console.log('✅ Stats updated successfully');
-
+      // Apply group results (already fetched in parallel above)
       if ((newStats.totalTeams || 0) > 0 && (newStats.totalMatches || 0) > 0) {
-        const divisions = DIVISIONS.map((d) => d.value);
-        const groupResults = await Promise.all(
-          divisions.map(async (division) => {
-            try {
-              const data = await getDivisionGroups(division);
-              return [division, data?.groups || []];
-            } catch {
-              return [division, []];
-            }
-          })
+        setDivisionGroupsByDivision(
+          Object.fromEntries(divisionValues.map((div, i) => [div, rawGroupResults[i]?.groups || []]))
         );
-        setDivisionGroupsByDivision(Object.fromEntries(groupResults));
       } else {
         setDivisionGroupsByDivision({});
       }
 
+      // Apply team counts (already fetched in parallel above)
       if ((newStats.totalPlayers || 0) > 0) {
+        const counts = Object.fromEntries(
+          DIVISIONS.map((d) => [
+            d.value,
+            allTeams.filter((t) => (t.division || DEFAULT_TOURNAMENT_DIVISION) === d.value).length,
+          ])
+        );
+        setDivisionTeamCounts(counts);
+
         setDivisionWorkflowLoading(true);
         try {
-          const allTeams = await getTeams();
-          const counts = Object.fromEntries(
-            DIVISIONS.map((d) => [
-              d.value,
-              allTeams.filter((t) => (t.division || DEFAULT_TOURNAMENT_DIVISION) === d.value).length,
-            ])
-          );
-          setDivisionTeamCounts(counts);
-
           const overviewResults = await Promise.all(
             DIVISIONS.map(async (division) => {
               try {
@@ -136,11 +125,7 @@ const HomePage = () => {
       }
     } catch (err) {
       console.error('❌ Error loading dashboard stats:', err);
-      // Don't show error if it's just a connection issue - user might not have backend running yet
       const errorMessage = err.message || 'Failed to load statistics';
-      const isLocalDev =
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1';
       if (errorMessage.includes('Backend server is not running')) {
         setError('⚠️ Backend server not detected. Please start the backend server to view statistics.');
       } else if (errorMessage.includes('Unable to reach the API server')) {

@@ -37,16 +37,17 @@ import {
   updateMatchResult
 } from '@/services/matchService';
 import { getTeams, updateTeam } from '@/services/teamService';
-import { assignPyramidTiers, getPyramidProgressionLog, getPyramidTiers, overridePyramidAdvancement, regeneratePyramidStage } from '@/services/tierPyramidService';
+import { assignPyramidTiers, activateLevel1B, getPyramidProgressionLog, getPyramidTiers, overridePyramidAdvancement, regeneratePyramidStage } from '@/services/tierPyramidService';
 import { getTournamentSetup } from '@/services/tournamentService';
 import {
   groupMatchesByRoundRobinRounds,
   summarizeLevel1Schedule,
 } from '@/utils/level1Matches';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
-import { derivePyramidTournamentStatus } from '@shared/tournament/formats/tierPyramid/advancement.js';
+import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
+import { deriveLevel1bStatus, derivePyramidTournamentStatus } from '@shared/tournament/formats/tierPyramid/advancement.js';
 import { filterMatchesForPyramidRound } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const getDivision = (item) => item?.division ?? null;
 
@@ -59,7 +60,9 @@ const KNOCKOUT_ROUND_TABS = [
 ];
 
 const PYRAMID_ROUND_TABS = [
-  { value: 'Level 1', label: 'Level 1 (S1 + S2)' },
+  { value: 'Level 1A', label: 'Level 1A (S1)' },
+  { value: 'Level 1B', label: 'Level 1B' },
+  { value: 'S3', label: 'S3 (Tier 1)' },
   { value: 'Level 2', label: 'Level 2' },
   { value: 'Level 3', label: 'Level 3' },
   { value: 'Semi Final', label: 'Semi Finals' },
@@ -69,6 +72,12 @@ const PYRAMID_ROUND_TABS = [
 
 const roundHasMatches = (divisionMatches, roundValue, isPyramid) => {
   if (isPyramid) {
+    if (roundValue === 'Level 1B') {
+      return (
+        divisionMatches.some((m) => m.round_type === 'S1') ||
+        filterMatchesForPyramidRound(divisionMatches, roundValue).length > 0
+      );
+    }
     return filterMatchesForPyramidRound(divisionMatches, roundValue).length > 0;
   }
   return divisionMatches.some((m) => m.round_type === roundValue);
@@ -76,9 +85,9 @@ const roundHasMatches = (divisionMatches, roundValue, isPyramid) => {
 
 const MatchesPage = () => {
   const { isAdmin } = useAuth();
-  const [matches, setMatches] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [matches, setMatches] = useState(() => getCached(CACHE_KEYS.matchesAll) || []);
+  const [teams, setTeams] = useState(() => getCached(CACHE_KEYS.teamsAll) || []);
+  const [loading, setLoading] = useState(() => !hasCached(CACHE_KEYS.matchesAll));
   const [error, setError] = useState(null);
   const [selectedRound, setSelectedRound] = useState('Qualifying');
   const [matchSearchQuery, setMatchSearchQuery] = useState('');
@@ -107,27 +116,59 @@ const MatchesPage = () => {
   const [progressionLog, setProgressionLog] = useState([]);
   const [logLoading, setLogLoading] = useState(false);
   const [pyramidAdminSaving, setPyramidAdminSaving] = useState(false);
+  const [activatingLevel1B, setActivatingLevel1B] = useState(false);
   const [autoFillingRound, setAutoFillingRound] = useState(null);
   const [autoFillingLabel, setAutoFillingLabel] = useState('');
   const timeSlotSummary = getTimeSlotSummary(timeSlotConfig);
   const courtSummary = getCourtSummary(courtConfig);
   const matchesPerWeekday = timeSlotSummary.slotsPerWeekday * courtConfig.courtCount;
 
-  const divisionTeams = teams.filter(t => getDivision(t) === selectedDivision);
-  const divisionMatches = matches.filter(m => getDivision(m) === selectedDivision);
+  const divisionTeams = useMemo(
+    () => teams.filter((t) => getDivision(t) === selectedDivision),
+    [teams, selectedDivision]
+  );
+  const divisionMatches = useMemo(
+    () => matches.filter((m) => getDivision(m) === selectedDivision),
+    [matches, selectedDivision]
+  );
   const selectedTournamentFormat = divisionTournamentFormats[selectedDivision] || DEFAULT_TOURNAMENT_FORMAT;
   const selectedCompetitionFormat = divisionCompetitionFormats[selectedDivision] || 'doubles';
   const isSinglesDivision = selectedCompetitionFormat === 'singles';
   const isTierPyramid = isTierPyramidFormat(selectedTournamentFormat) || setupOptions?.format === 'tier-pyramid';
-  const level1Matches = divisionMatches.filter((m) => m.round_type === 'S1' || m.round_type === 'S2');
-  const teamTierMap = Object.fromEntries(
-    (pyramidTierState?.teams || divisionTeams).map((t) => [t.id, tierAssignments[t.id] ?? t.tier])
+  const level1aMatches = useMemo(
+    () => divisionMatches.filter((m) => m.round_type === 'S1'),
+    [divisionMatches]
   );
-  const pyramidStatus = isTierPyramid ? derivePyramidTournamentStatus(divisionMatches) : null;
+  const s3Matches = useMemo(
+    () => divisionMatches.filter((m) => m.round_type === 'S2' || m.round_type === 'S3'),
+    [divisionMatches]
+  );
+  const level1bMatches = useMemo(
+    () => divisionMatches.filter((m) => m.round_type === 'Level 1B'),
+    [divisionMatches]
+  );
+  const level1Matches = useMemo(
+    () => [...level1aMatches, ...s3Matches],
+    [level1aMatches, s3Matches]
+  );
+  // Passed to every MatchCard — memoized so a stable reference lets React.memo skip cards.
+  const teamTierMap = useMemo(
+    () =>
+      Object.fromEntries(
+        (pyramidTierState?.teams || divisionTeams).map((t) => [t.id, tierAssignments[t.id] ?? t.tier])
+      ),
+    [pyramidTierState, divisionTeams, tierAssignments]
+  );
   const pyramidAdminTeams = (pyramidTierState?.teams || divisionTeams).map((t) => ({
     ...t,
     tier: tierAssignments[t.id] ?? t.tier,
   }));
+  const level1bStatus = isTierPyramid
+    ? deriveLevel1bStatus(divisionMatches, {}, pyramidAdminTeams)
+    : 'waiting';
+  const pyramidStatus = isTierPyramid
+    ? derivePyramidTournamentStatus(divisionMatches, {}, { level1bStatus })
+    : null;
   const quarterFinalMatches = divisionMatches.filter((m) => m.round_type === 'Quarter Final');
   const semiFinalMatches = divisionMatches.filter((m) => m.round_type === 'Semi Final');
   const isSingleGroup = Boolean(
@@ -186,10 +227,33 @@ const MatchesPage = () => {
     divisionMatches.filter((m) => m.round_type === 'Final').length === 0 &&
     (semiFinalsComplete || (skipsSemiFinals && quarterFinalMatches.length === 2 && quarterFinalsComplete));
 
-  // Load data when division changes
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    try {
+      // Only show the full-screen spinner on a true cold load. When we already
+      // have cached data we revalidate silently to avoid a UI flash.
+      if (!silent) setLoading(true);
+      setError(null);
+
+      // getMatches()/getTeams() with no division return every division in a
+      // single query each (2 requests total), then we filter client-side.
+      const [allMatches, allTeams] = await Promise.all([getMatches(), getTeams()]);
+
+      setCached(CACHE_KEYS.matchesAll, allMatches);
+      setCached(CACHE_KEYS.teamsAll, allTeams);
+      setMatches(allMatches);
+      setTeams(allTeams);
+    } catch (err) {
+      setError(err.message || 'Failed to load data');
+      console.error('Error loading data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load on mount. If cache is warm, paint it immediately and revalidate silently.
   useEffect(() => {
-    loadData(selectedDivision);
-  }, [selectedDivision]);
+    loadData({ silent: hasCached(CACHE_KEYS.matchesAll) });
+  }, [loadData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,9 +263,11 @@ const MatchesPage = () => {
       setSetupOptions(null);
       setSelectedGroupCount(null);
       try {
-        const [setup, settingsRows] = await Promise.all([
+        // Fetch setup, settings, and potential pyramid tiers all in parallel
+        const [setup, settingsRows, pyramidTiersResult] = await Promise.all([
           getTournamentSetup(selectedDivision, { timeSlotConfig, courtConfig }),
           getDivisionSettings(),
+          getPyramidTiers(selectedDivision).catch(() => null), // Pre-fetch, may not be needed
         ]);
         const formats = buildDivisionMap(DEFAULT_TOURNAMENT_FORMAT);
         const competitionFormats = buildDivisionMap('doubles');
@@ -216,11 +282,12 @@ const MatchesPage = () => {
         const defaultCount = setup?.defaultGroupCount ?? null;
         setSelectedGroupCount(defaultCount);
         setSelectedRound(
-          isTierPyramidFormat(formats[selectedDivision] || setup?.format) ? 'Level 1' : 'Qualifying'
+          isTierPyramidFormat(formats[selectedDivision] || setup?.format) ? 'Level 1A' : 'Qualifying'
         );
 
         if (isTierPyramidFormat(formats[selectedDivision] || setup?.format)) {
-          const tierData = await getPyramidTiers(selectedDivision);
+          // Use pre-fetched tier data if pyramid format
+          const tierData = pyramidTiersResult || (await getPyramidTiers(selectedDivision));
           if (!cancelled) {
             setPyramidTierState(tierData);
             const map = {};
@@ -353,7 +420,7 @@ const MatchesPage = () => {
           throw new Error(`Schedule was created for ${schedule.division} instead of ${selectedDivisionLabel}.`);
         }
 
-        await loadData(selectedDivision);
+        await loadData({ silent: true });
 
         let message = scheduleWizard.isTierPyramid
           ? `${selectedDivisionLabel}: ${schedule.matches.length} Level 1 matches created (S1 + S2). Later levels auto-generate as you enter results.`
@@ -395,7 +462,7 @@ const MatchesPage = () => {
         configuredTimeSlots,
         configuredCourts
       );
-      await loadData();
+      await loadData({ silent: true });
       const matchesCreated = result?.data?.matches?.length || result?.matches?.length || 0;
       await showSuccess('Knockout scheduled', result?.message || `${handler.label} generated! ${matchesCreated} match(es) created.`);
       closeScheduleWizard();
@@ -406,25 +473,6 @@ const MatchesPage = () => {
     }
   };
 
-  const loadData = async (division = selectedDivision) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [matchesData, teamsData] = await Promise.all([
-        getMatches(division),
-        getTeams(division),
-      ]);
-      setMatches(matchesData);
-      setTeams(teamsData);
-    } catch (err) {
-      setError(err.message || 'Failed to load data');
-      console.error('Error loading data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
   // Generate match schedule — opens wizard
   const handleGenerateSchedule = () => {
     openGroupStageWizard();
@@ -432,23 +480,36 @@ const MatchesPage = () => {
 
   // Client-side search within the selected division (matches by team name)
   const normalizedMatchQuery = matchSearchQuery.trim().toLowerCase();
-  const matchMatchesQuery = (m) =>
-    !normalizedMatchQuery ||
-    [m.team1_name, m.team2_name]
-      .filter(Boolean)
-      .some((name) => String(name).toLowerCase().includes(normalizedMatchQuery));
+  const matchMatchesQuery = useCallback(
+    (m) =>
+      !normalizedMatchQuery ||
+      [m.team1_name, m.team2_name]
+        .filter(Boolean)
+        .some((name) => String(name).toLowerCase().includes(normalizedMatchQuery)),
+    [normalizedMatchQuery]
+  );
 
   // Filter matches by division and round
-  const filteredMatches = (selectedRound === 'all'
-    ? divisionMatches
-    : isTierPyramid
-      ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
-      : divisionMatches.filter((m) => m.round_type === selectedRound)
-  ).filter(matchMatchesQuery);
+  const filteredMatches = useMemo(
+    () =>
+      (selectedRound === 'all'
+        ? divisionMatches
+        : isTierPyramid
+          ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
+          : divisionMatches.filter((m) => m.round_type === selectedRound)
+      ).filter(matchMatchesQuery),
+    [divisionMatches, selectedRound, isTierPyramid, matchMatchesQuery]
+  );
 
-  const level1S2Matches = divisionMatches.filter((m) => m.round_type === 'S2');
+  const level1S2Matches = useMemo(
+    () => s3Matches,
+    [s3Matches]
+  );
   const level1Summary = summarizeLevel1Schedule(level1Matches, setupOptions?.matchCounts || {});
-  const s2RoundGroups = groupMatchesByRoundRobinRounds(level1S2Matches.filter(matchMatchesQuery));
+  const s2RoundGroups = useMemo(
+    () => groupMatchesByRoundRobinRounds(level1S2Matches.filter(matchMatchesQuery)),
+    [level1S2Matches, matchMatchesQuery]
+  );
 
   const qualifyingCount = divisionMatches.filter((m) => m.round_type === 'Qualifying').length;
   const activeGroupCount = selectedGroupCount ?? setupOptions?.defaultGroupCount;
@@ -463,18 +524,18 @@ const MatchesPage = () => {
     qualifyingCount > 0 &&
     qualifyingCount !== expectedQualifyingMatches;
 
-  // Handle update result (admin only)
-  const handleUpdateResult = (match) => {
+  // Stable handlers passed to memoized MatchCards so cards skip re-renders.
+  const handleUpdateResult = useCallback((match) => {
     setSelectedMatch(match);
     setShowMatchDetail(false);
     setShowResultForm(true);
-  };
+  }, []);
 
-  const handleViewMatch = (match) => {
+  const handleViewMatch = useCallback((match) => {
     setSelectedMatch(match);
     setShowResultForm(false);
     setShowMatchDetail(true);
-  };
+  }, []);
 
   const closeMatchModal = () => {
     setShowResultForm(false);
@@ -581,18 +642,12 @@ const MatchesPage = () => {
       // Wait a brief moment to ensure database transaction is complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Reload matches to show updated results
-      const [matchesData, teamsData] = await Promise.all([
-        getMatches(selectedDivision),
-        getTeams(selectedDivision),
-      ]);
-
-      // Update matches and teams state
-      setMatches(matchesData);
-      setTeams(teamsData);
-
-      // Log for debugging
-      console.log('Match result saved');
+      // Reload all divisions so tab counts stay accurate
+      await loadData({ silent: true });
+      if (isTierPyramid) {
+        const tierData = await getPyramidTiers(selectedDivision);
+        setPyramidTierState(tierData);
+      }
     } catch (err) {
       setError(err.message || 'Failed to update match result');
       console.error('Error updating result:', err);
@@ -639,7 +694,7 @@ const MatchesPage = () => {
         gamePointsPerSet: setConfig.gamePointsPerSet,
       });
 
-      await loadData(selectedDivision);
+      await loadData({ silent: true });
       if (isTierPyramid && level1Matches.length > 0) {
         await loadProgressionLog(selectedDivision);
       }
@@ -742,7 +797,7 @@ const MatchesPage = () => {
       setPyramidAdminSaving(true);
       setError(null);
       await overridePyramidAdvancement(selectedDivision, updates, notes);
-      await loadData(selectedDivision);
+      await loadData({ silent: true });
       await loadProgressionLog(selectedDivision);
       const tierData = await getPyramidTiers(selectedDivision);
       setPyramidTierState(tierData);
@@ -759,7 +814,7 @@ const MatchesPage = () => {
       setPyramidAdminSaving(true);
       setError(null);
       const result = await regeneratePyramidStage(selectedDivision, fromStage);
-      await loadData(selectedDivision);
+      await loadData({ silent: true });
       await loadProgressionLog(selectedDivision);
       const tierData = await getPyramidTiers(selectedDivision);
       setPyramidTierState(tierData);
@@ -775,21 +830,48 @@ const MatchesPage = () => {
     }
   };
 
-  const groupPools = isTierPyramid
-    ? [...new Set(level1Matches.filter((m) => m.round_type === 'S1' && m.pool).map((m) => m.pool))].sort()
-    : [
-      ...new Set(
-        divisionMatches
-          .filter((m) => m.round_type === 'Qualifying' && m.pool)
-          .map((m) => m.pool)
-      ),
-    ].sort();
-  const qualifyingMatchesByPool = groupPools.reduce((acc, pool) => {
-    acc[pool] = filteredMatches.filter((m) =>
-      isTierPyramid ? m.round_type === 'S1' && m.pool === pool : m.round_type === 'Qualifying' && m.pool === pool
-    );
-    return acc;
-  }, {});
+  const handleActivateLevel1B = async () => {
+    try {
+      setActivatingLevel1B(true);
+      setError(null);
+      const result = await activateLevel1B(selectedDivision);
+      await loadData({ silent: true });
+      const tierData = await getPyramidTiers(selectedDivision);
+      setPyramidTierState(tierData);
+      await showSuccess(
+        'Level 1B activated',
+        result?.message || 'Cross-group matches have been scheduled.'
+      );
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to activate Level 1B');
+    } finally {
+      setActivatingLevel1B(false);
+    }
+  };
+
+  const groupPools = useMemo(
+    () =>
+      isTierPyramid
+        ? [...new Set(level1Matches.filter((m) => m.round_type === 'S1' && m.pool).map((m) => m.pool))].sort()
+        : [
+          ...new Set(
+            divisionMatches
+              .filter((m) => m.round_type === 'Qualifying' && m.pool)
+              .map((m) => m.pool)
+          ),
+        ].sort(),
+    [isTierPyramid, level1Matches, divisionMatches]
+  );
+  const qualifyingMatchesByPool = useMemo(
+    () =>
+      groupPools.reduce((acc, pool) => {
+        acc[pool] = filteredMatches.filter((m) =>
+          isTierPyramid ? m.round_type === 'S1' && m.pool === pool : m.round_type === 'Qualifying' && m.pool === pool
+        );
+        return acc;
+      }, {}),
+    [groupPools, filteredMatches, isTierPyramid]
+  );
 
   const handleSetConfigChange = (roundType, value) => {
     setSetConfig((prev) => ({
@@ -840,31 +922,33 @@ const MatchesPage = () => {
 
       {isAdmin && (
         <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-          <div>
-            <h3 className="font-semibold text-gray-900">Match configuration</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Configure sets per round and game length (11 or 21 points). Saved in this browser for
-              scoring and tie-break rules.
-            </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div>
+              <h3 className="font-semibold text-gray-900">Match configuration</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Configure sets per round and game length (11 or 21 points). Saved in this browser for
+                scoring and tie-break rules.
+              </p>
+            </div>
+
+            <label className="flex gap-3 text-sm text-gray-700">
+              <span className="block mb-1">Points per game</span>
+              <select
+                value={setConfig.gamePointsPerSet ?? 11}
+                onChange={(e) => handleGamePointsChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                {GAME_POINT_OPTIONS.map((points) => (
+                  <option key={points} value={points}>
+                    {points}-point games
+                    {points === 11 ? ' (6-0 knockout)' : ' (7-0 / 11-1 knockout)'}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          <label className="block text-sm text-gray-700 max-w-xs">
-            <span className="block mb-1">Points per game</span>
-            <select
-              value={setConfig.gamePointsPerSet ?? 11}
-              onChange={(e) => handleGamePointsChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              {GAME_POINT_OPTIONS.map((points) => (
-                <option key={points} value={points}>
-                  {points}-point games
-                  {points === 11 ? ' (6-0 knockout)' : ' (7-0 / 11-1 knockout)'}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-6 gap-3">
             {editableRounds.map((roundType) => (
               <label key={roundType} className="text-sm text-gray-700">
                 <span className="block mb-1">{getMatchSetRoundLabel(roundType)}</span>
@@ -903,7 +987,12 @@ const MatchesPage = () => {
           setMatchSearchQuery('');
         }}
         counts={Object.fromEntries(
-          DIVISIONS.map((d) => [d.value, teams.filter((t) => getDivision(t) === d.value).length])
+          DIVISIONS.map((d) => {
+            const divisionMatches = matches.filter((m) => getDivision(m) === d.value);
+            const completedCount = divisionMatches.filter((m) => m.status === 'Completed').length;
+            const totalCount = divisionMatches.length;
+            return [d.value, totalCount > 0 ? `${completedCount}/${totalCount}` : '0'];
+          })
         )}
       />
 
@@ -957,6 +1046,7 @@ const MatchesPage = () => {
                     onRefreshLog={() => loadProgressionLog(selectedDivision)}
                     divisionLabel={selectedDivisionLabel}
                     tournamentStatus={pyramidStatus}
+                    level1bStatus={level1bStatus}
                     saving={pyramidAdminSaving}
                   />
                 )}
@@ -1059,7 +1149,8 @@ const MatchesPage = () => {
             {isAdmin
               ? ' Enter results to unlock Level 2+.'
               : ' Later levels unlock as results are entered.'} <br />
-            <strong>Level 1</strong> runs S1 group matches (Tiers 2 - 3) and the Tier 1 round-robin in parallel.
+            <strong>Level 1A</strong> (S1 groups) and <strong>S3</strong> (Tier 1 round-robin) run in parallel.
+            Top 2 per group advance to <strong>Level 1B</strong>, then top 4 advance to Level 2.
           </p>
           <p>
             Scheduled: <strong>{level1Summary.total}</strong>
@@ -1081,48 +1172,21 @@ const MatchesPage = () => {
         </div>
       )}
 
-      {!loading && isTierPyramid && level1Matches.length > 0 && selectedRound === 'Level 1' && (
+      {!loading && isTierPyramid && level1aMatches.length > 0 && selectedRound === 'Level 1A' && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-2xl font-bold text-gray-900">Level 1</h3>
-            {renderLevelAutoFillButton('Level 1', 'Level 1')}
+            <h3 className="text-2xl font-bold text-gray-900">Level 1A — S1 Groups</h3>
+            {renderLevelAutoFillButton('Level 1A', 'Level 1A')}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            {groupPools.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="text-xl font-semibold text-gray-900">S1 - Groups (Tiers 2 - 3)</h4>
-                {groupPools.map((pool) =>
-                  qualifyingMatchesByPool[pool]?.length > 0 ? (
-                    <div key={pool}>
-                      <h4 className="text-lg font-semibold text-gray-800 mb-3">Group {pool}</h4>
-                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        {qualifyingMatchesByPool[pool].map((match) => (
-                          <MatchCard
-                            key={match.id}
-                            match={match}
-                            onUpdateResult={handleUpdateResult}
-                            onViewDetails={handleViewMatch}
-                            isAdmin={isAdmin}
-                            teamTiers={teamTierMap}
-                            setConfig={setConfig}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ) : null
-                )}
-              </div>
-            )}
-
-            {s2RoundGroups.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="text-xl font-semibold text-gray-900">S2 - Round-robin (Tier 1)</h4>
-                {s2RoundGroups.map((round) => (
-                  <div key={round.roundNumber}>
-                    <h4 className="text-lg font-semibold text-gray-800 mb-3">Round {round.roundNumber}</h4>
+          {groupPools.length > 0 && (
+            <div className="space-y-4">
+              {groupPools.map((pool) =>
+                qualifyingMatchesByPool[pool]?.length > 0 ? (
+                  <div key={pool}>
+                    <h4 className="text-lg font-semibold text-gray-800 mb-3">Group {pool}</h4>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      {round.matches.map((match) => (
+                      {qualifyingMatchesByPool[pool].map((match) => (
                         <MatchCard
                           key={match.id}
                           match={match}
@@ -1135,10 +1199,86 @@ const MatchesPage = () => {
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                ) : null
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!loading && isTierPyramid && selectedRound === 'S3' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-2xl font-bold text-gray-900">S3 — Tier 1 Round-robin</h3>
+            {renderLevelAutoFillButton('S3', 'S3')}
           </div>
+          {s2RoundGroups.length > 0 ? (
+            s2RoundGroups.map((round) => (
+              <div key={round.roundNumber}>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">Round {round.roundNumber}</h4>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {round.matches.map((match) => (
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      onUpdateResult={handleUpdateResult}
+                      onViewDetails={handleViewMatch}
+                      isAdmin={isAdmin}
+                      teamTiers={teamTierMap}
+                      setConfig={setConfig}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-500 text-sm">No Tier 1 matches scheduled yet.</p>
+          )}
+        </div>
+      )}
+
+      {!loading && isTierPyramid && selectedRound === 'Level 1B' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-2xl font-bold text-gray-900">Level 1B — Cross-group Qualifiers</h3>
+            {level1bMatches.length > 0 && renderLevelAutoFillButton('Level 1B', 'Level 1B')}
+          </div>
+
+          {(level1bStatus === 'waiting' || level1bStatus === 'ready') && level1bMatches.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-amber-900 font-medium">
+                {level1bStatus === 'waiting'
+                  ? 'Complete all Level 1A groups to unlock Level 1B.'
+                  : 'Level 1A is complete — Level 1B is ready to activate.'}
+              </p>
+              {level1bStatus === 'ready' && isAdmin && (
+                <Button
+                  className="mt-3"
+                  variant="primary"
+                  onClick={handleActivateLevel1B}
+                  disabled={activatingLevel1B}
+                >
+                  {activatingLevel1B ? 'Activating…' : 'Activate Level 1B'}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {level1bMatches.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
+              {level1bMatches.map((match) => (
+                <MatchCard
+                  key={match.id}
+                  match={match}
+                  onUpdateResult={handleUpdateResult}
+                  onViewDetails={handleViewMatch}
+                  isAdmin={isAdmin}
+                  teamTiers={teamTierMap}
+                  setConfig={setConfig}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1298,7 +1438,7 @@ const MatchesPage = () => {
 
       {/* Knockout & pyramid rounds L2+ (flat list) */}
       {!loading &&
-        !['Qualifying', 'Level 1'].includes(selectedRound) &&
+        !['Qualifying', 'Level 1', 'Level 1A', 'Level 1B', 'S3'].includes(selectedRound) &&
         filteredMatches.length > 0 && (
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -1306,6 +1446,7 @@ const MatchesPage = () => {
                 {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
                 {selectedRound === 'Third Place' && 'Third Place Match'}
                 {selectedRound === 'Level 2' && 'Level 2 - Qualifying Matches'}
+                {selectedRound === 'Level 1B' && 'Level 1B - Cross-group Matches'}
                 {selectedRound === 'Level 3' && 'Level 3 - Crossover Matches'}
                 {selectedRound === 'Semi Final' && 'Semi Final Matches'}
                 {selectedRound === 'Final' && 'Final Match'}
@@ -1358,8 +1499,12 @@ const MatchesPage = () => {
               {!isTierPyramid && selectedRound === 'Final' && 'Complete prior rounds to generate the Final.'}
               {isTierPyramid && selectedRound === 'Semi Final' && 'Complete Level 3 to generate Semi Finals.'}
               {isTierPyramid && selectedRound === 'Final' && 'Complete Semi Finals to generate the Final.'}
+              {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'waiting' &&
+                'Complete all Level 1A groups to unlock Level 1B.'}
+              {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'ready' &&
+                'Level 1A is complete — an admin must activate Level 1B.'}
               {isTierPyramid &&
-                !['Semi Final', 'Final'].includes(selectedRound) &&
+                !['Semi Final', 'Final', 'Level 1B'].includes(selectedRound) &&
                 'Complete earlier pyramid stages to unlock this round.'}
             </p>
           </div>
@@ -1375,7 +1520,7 @@ const MatchesPage = () => {
               <Button type="submit" form="match-result-form" variant="primary">
                 Save Changes
               </Button>
-              
+
               <Button type="button" variant="outline" onClick={closeMatchModal}>
                 Cancel
               </Button>
