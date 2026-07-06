@@ -34,12 +34,15 @@ export function groupMatchesByRoundRobinRounds(matches) {
 export function getPyramidMatchStageLabel(match) {
   if (match.round_type === 'S1') {
     return {
-      primary: 'Level 1',
+      primary: 'Level 1A',
       secondary: match.pool ? `Group ${match.pool}` : 'S1',
     };
   }
+  if (match.round_type === 'Level 1B') {
+    return { primary: 'Level 1B', secondary: 'Cross-group' };
+  }
   if (match.round_type === 'S2' || match.round_type === 'S3') {
-    return { primary: 'Level 1', secondary: 'Tier 1' };
+    return { primary: 'S3', secondary: 'Tier 1' };
   }
   return { primary: match.round_type, secondary: null };
 }

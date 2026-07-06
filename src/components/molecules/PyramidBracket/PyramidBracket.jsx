@@ -62,6 +62,7 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
   const view = buildPyramidBracketView(overview);
   const { stages } = view;
   const hasL1 = view.s1.matches.length > 0 || view.s2.matches.length > 0;
+  const hasL1B = view.l1b.matches.length > 0;
   const hasL2 = view.l2.matches.length > 0;
   const hasL3 = view.l3.matches.length > 0;
   const hasSemiFinals = view.semiFinals.length > 0;
@@ -81,7 +82,7 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Parallel Level 1: S1 (Tier 2/3 groups) and S2 (Tier 1). Winners converge at Level 2 and Level 3.
+        Parallel Level 1A (S1 groups) and S3 (Tier 1) run together. Top 2 per group enter Level 1B; top 4 advance to Level 2.
       </p>
       <div className="overflow-x-auto pb-2 space-y-4">
         <StageColumn
@@ -102,6 +103,23 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
               </div>
             </div>
           ))}
+        </StageColumn>
+
+        <StageColumn
+          title={stages.L1B.label}
+          subtitle={stages.L1B.subtitle}
+          accent={stages.L1B.accent}
+          locked={!hasL1B}
+        >
+          {hasL1B ? (
+            <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {view.l1b.matches.map((m) => (
+                <BracketMatchCard key={m.id} match={m} accent="bg-white/80 border-teal-100" />
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-600">Level 1A must complete first</p>
+          )}
         </StageColumn>
 
         <StageColumn
@@ -163,7 +181,7 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
               </>
             ) : (
               <p className="text-xs text-gray-600">
-                S1 + S2 must complete first
+                Level 1B + S3 must complete first
               </p>
             )
           }

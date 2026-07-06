@@ -7,6 +7,7 @@ const PYRAMID_STAGES = [
   { value: 'registered', label: 'Registered' },
   { value: 'S1', label: 'S1' },
   { value: 'S2', label: 'S2' },
+  { value: 'L1B', label: 'Level 1B' },
   { value: 'L2', label: 'Level 2' },
   { value: 'L3', label: 'Level 3' },
   { value: 'final', label: 'Final' },
@@ -22,7 +23,8 @@ const PYRAMID_STATUSES = [
 ];
 
 const REGENERATE_STAGES = [
-  { value: 'Level 1', label: 'Level 1 (S1 + S2)' },
+  { value: 'Level 1', label: 'Level 1 (S1 + S3)' },
+  { value: 'Level 1B', label: 'Level 1B' },
   { value: 'Level 2', label: 'Level 2' },
   { value: 'Level 3', label: 'Level 3' },
   { value: 'Final', label: 'Final' },
@@ -37,6 +39,7 @@ const PyramidAdminPanel = ({
   onRefreshLog,
   divisionLabel = '',
   tournamentStatus = '',
+  level1bStatus = '',
   saving = false,
 }) => {
   const [selectedTeamId, setSelectedTeamId] = useState('');
@@ -90,6 +93,9 @@ const PyramidAdminPanel = ({
           Override entrant stages or regenerate downstream brackets after score corrections.
           {tournamentStatus && (
             <span className="ml-2 text-gray-500">Current status: {tournamentStatus}</span>
+          )}
+          {level1bStatus && (
+            <span className="ml-2 text-gray-500">Level 1B gate: {level1bStatus}</span>
           )}
         </p>
       </div>

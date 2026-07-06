@@ -35,6 +35,11 @@ export const overridePyramidAdvancement = async (division, updates, notes = null
   return response.data;
 };
 
+export const activateLevel1B = async (division) => {
+  const response = await api.post('/tournament/pyramid/activate-level1b', { division });
+  return response.data;
+};
+
 export const regeneratePyramidStage = async (division, fromStage) => {
   const response = await api.post('/tournament/pyramid/regenerate-stage', {
     division,
