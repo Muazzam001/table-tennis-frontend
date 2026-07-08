@@ -36,7 +36,7 @@ const MatchCard = ({
 
   return (
     <div className={`bg-white rounded-lg shadow-md p-5 border ${isCompleted ? 'border-green-200' : isAbandoned ? 'border-red-200' : 'border-gray-200'}`}>
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-2.5 justify-between">
         {/* Round and Pool Info */}
         <div className="flex items-center justify-between">
           <MatchStageBadge match={match} />

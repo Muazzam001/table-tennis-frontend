@@ -4,9 +4,9 @@ import {
 } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
 
 const STAGE_META = {
-  S1: { label: 'Level 1A', subtitle: 'Tier 2 & 3 groups', accent: 'border-green-300 bg-green-50' },
-  L1B: { label: 'Level 1B', subtitle: '8 → 4 cross-group', accent: 'border-teal-300 bg-teal-50' },
-  S2: { label: 'S3', subtitle: 'Tier 1 round-robin', accent: 'border-blue-300 bg-blue-50' },
+  S1: { label: 'Level 1A (S1)', subtitle: 'Tier 2 & 3 groups', accent: 'border-green-300 bg-green-50' },
+  L1B: { label: 'Level 1B (S1)', subtitle: '16 → 4 cross-group', accent: 'border-teal-300 bg-teal-50' },
+  S2: { label: 'Level 1C (S2)', subtitle: 'Tier 1 round-robin', accent: 'border-blue-300 bg-blue-50' },
   L2: { label: 'Level 2', subtitle: 'Qualifying', accent: 'border-amber-300 bg-amber-50' },
   L3: { label: 'Level 3', subtitle: 'Crossover', accent: 'border-red-300 bg-red-50' },
   SF: { label: 'Semi Finals', subtitle: '4 → 2', accent: 'border-orange-300 bg-orange-50' },
