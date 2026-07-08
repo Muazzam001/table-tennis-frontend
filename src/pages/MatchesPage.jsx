@@ -156,23 +156,19 @@ const MatchesPage = () => {
     [level1aMatches, s3Matches]
   );
   // Passed to every MatchCard — memoized so a stable reference lets React.memo skip cards.
-  const teamTierMap = useMemo(
-    () =>
-      Object.fromEntries(
-        (pyramidTierState?.teams || divisionTeams).map((t) => [t.id, tierAssignments[t.id] ?? t.tier])
-      ),
+  const teamTierMap = useMemo(() => Object.fromEntries(
+    (pyramidTierState?.teams || divisionTeams).map((t) => [t.id, tierAssignments[t.id] ?? t.tier])
+  ),
     [pyramidTierState, divisionTeams, tierAssignments]
   );
   const pyramidAdminTeams = (pyramidTierState?.teams || divisionTeams).map((t) => ({
-    ...t,
-    tier: tierAssignments[t.id] ?? t.tier,
+    ...t, tier: tierAssignments[t.id] ?? t.tier,
   }));
   const level1bStatus = isTierPyramid
     ? deriveLevel1bStatus(divisionMatches, {}, pyramidAdminTeams)
     : 'waiting';
   const pyramidStatus = isTierPyramid
-    ? derivePyramidTournamentStatus(divisionMatches, {}, { level1bStatus })
-    : null;
+    ? derivePyramidTournamentStatus(divisionMatches, {}, { level1bStatus }) : null;
   const quarterFinalMatches = divisionMatches.filter((m) => m.round_type === 'Quarter Final');
   const semiFinalMatches = divisionMatches.filter((m) => m.round_type === 'Semi Final');
   const isSingleGroup = Boolean(
@@ -385,10 +381,8 @@ const MatchesPage = () => {
       title: isTierPyramid
         ? `Create ${selectedDivisionLabel} Tier Pyramid Level 1 schedule`
         : `Create ${selectedDivisionLabel} group stage schedule`,
-      groupCount,
-      matchCount,
-      existingQualifyingCount: isTierPyramid
-        ? level1Matches.length
+      groupCount, matchCount,
+      existingQualifyingCount: isTierPyramid ? level1Matches.length
         : divisionMatches.filter((m) => m.round_type === 'Qualifying').length,
       teamCount: setupOptions.teamCount,
       isTierPyramid,
@@ -485,10 +479,8 @@ const MatchesPage = () => {
   // Client-side search within the selected division (matches by team name)
   const normalizedMatchQuery = matchSearchQuery.trim().toLowerCase();
   const matchMatchesQuery = useCallback(
-    (m) =>
-      !normalizedMatchQuery ||
-      [m.team1_name, m.team2_name]
-        .filter(Boolean)
+    (m) => !normalizedMatchQuery ||
+      [m.team1_name, m.team2_name].filter(Boolean)
         .some((name) => String(name).toLowerCase().includes(normalizedMatchQuery)),
     [normalizedMatchQuery]
   );
@@ -496,18 +488,15 @@ const MatchesPage = () => {
   // Filter matches by division and round
   const filteredMatches = useMemo(
     () =>
-      (selectedRound === 'all'
-        ? divisionMatches
-        : isTierPyramid
-          ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
-          : divisionMatches.filter((m) => m.round_type === selectedRound)
+      (selectedRound === 'all' ? divisionMatches : isTierPyramid
+        ? filterMatchesForPyramidRound(divisionMatches, selectedRound)
+        : divisionMatches.filter((m) => m.round_type === selectedRound)
       ).filter(matchMatchesQuery),
     [divisionMatches, selectedRound, isTierPyramid, matchMatchesQuery]
   );
 
   const level1S2Matches = useMemo(
-    () => s3Matches,
-    [s3Matches]
+    () => s3Matches, [s3Matches]
   );
   const level1Summary = summarizeLevel1Schedule(level1Matches, setupOptions?.matchCounts || {});
   const s2RoundGroups = useMemo(
@@ -517,15 +506,10 @@ const MatchesPage = () => {
 
   const qualifyingCount = divisionMatches.filter((m) => m.round_type === 'Qualifying').length;
   const activeGroupCount = selectedGroupCount ?? setupOptions?.defaultGroupCount;
-  const expectedQualifyingMatches =
-    setupOptions?.isValid && activeGroupCount
-      ? activeGroupCount *
-      (((divisionTeams.length / activeGroupCount) * (divisionTeams.length / activeGroupCount - 1)) / 2)
-      : null;
+  const expectedQualifyingMatches = setupOptions?.isValid && activeGroupCount
+    ? activeGroupCount * (((divisionTeams.length / activeGroupCount) * (divisionTeams.length / activeGroupCount - 1)) / 2) : null;
   const scheduleMismatch =
-    !isTierPyramid &&
-    expectedQualifyingMatches != null &&
-    qualifyingCount > 0 &&
+    !isTierPyramid && expectedQualifyingMatches != null && qualifyingCount > 0 &&
     qualifyingCount !== expectedQualifyingMatches;
 
   // Stable handlers passed to memoized MatchCards so cards skip re-renders.
@@ -857,23 +841,16 @@ const MatchesPage = () => {
     () =>
       isTierPyramid
         ? [...new Set(level1Matches.filter((m) => m.round_type === 'S1' && m.pool).map((m) => m.pool))].sort()
-        : [
-          ...new Set(
-            divisionMatches
-              .filter((m) => m.round_type === 'Qualifying' && m.pool)
-              .map((m) => m.pool)
-          ),
-        ].sort(),
+        : [...new Set(divisionMatches.filter((m) => m.round_type === 'Qualifying' && m.pool).map((m) => m.pool))].sort(),
     [isTierPyramid, level1Matches, divisionMatches]
   );
-  const qualifyingMatchesByPool = useMemo(
-    () =>
-      groupPools.reduce((acc, pool) => {
-        acc[pool] = filteredMatches.filter((m) =>
-          isTierPyramid ? m.round_type === 'S1' && m.pool === pool : m.round_type === 'Qualifying' && m.pool === pool
-        );
-        return acc;
-      }, {}),
+  const qualifyingMatchesByPool = useMemo(() =>
+    groupPools.reduce((acc, pool) => {
+      acc[pool] = filteredMatches.filter((m) =>
+        isTierPyramid ? m.round_type === 'S1' && m.pool === pool : m.round_type === 'Qualifying' && m.pool === pool
+      );
+      return acc;
+    }, {}),
     [groupPools, filteredMatches, isTierPyramid]
   );
 
@@ -919,7 +896,7 @@ const MatchesPage = () => {
           <p className="text-gray-600 mt-1">
             {isAdmin
               ? 'Schedule and score matches per division - each division has its own tournament flow'
-              : 'Browse schedules and results per division — read-only view'}
+              : 'Browse schedules and results per division - read-only view'}
           </p>
         </div>
       </div>
@@ -945,7 +922,7 @@ const MatchesPage = () => {
                 {GAME_POINT_OPTIONS.map((points) => (
                   <option key={points} value={points}>
                     {points}-point games
-                    {points === 11 ? ' (6-0 knockout)' : ' (7-0 / 11-1 knockout)'}
+                    {points === 11 ? ' (6-0 / 9-1 knockout)' : ' (7-0 / 11-1 knockout)'}
                   </option>
                 ))}
               </select>
@@ -1169,8 +1146,7 @@ const MatchesPage = () => {
           </p>
           {level1Summary.isIncomplete && (
             <p className="text-amber-800 font-medium">
-              {isAdmin
-                ? 'Schedule looks incomplete - regenerate Level 1 with a wider date range if matches are missing.'
+              {isAdmin ? 'Schedule looks incomplete - regenerate Level 1 with a wider date range if matches are missing.'
                 : 'The Level 1 schedule may still be incomplete.'}
             </p>
           )}
@@ -1182,7 +1158,7 @@ const MatchesPage = () => {
           {level1aMatches.length > 0 && selectedRound === 'Level 1A' && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-2xl font-bold text-gray-900">S1 — Group play</h3>
+                <h3 className="text-2xl font-bold text-gray-900">S1 - Group play</h3>
                 {renderLevelAutoFillButton('Level 1A', 'S1')}
               </div>
 
@@ -1216,7 +1192,7 @@ const MatchesPage = () => {
           {selectedRound === 'S3' && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-2xl font-bold text-gray-900">S2 — Tier 1 round-robin</h3>
+                <h3 className="text-2xl font-bold text-gray-900">S2 - Tier 1 round-robin</h3>
                 {renderLevelAutoFillButton('S3', 'S2')}
               </div>
               {s2RoundGroups.length > 0 ? (
@@ -1434,7 +1410,8 @@ const MatchesPage = () => {
             <h3 className="text-2xl font-bold text-gray-900">Qualifying Round</h3>
             {renderLevelAutoFillButton('Qualifying', 'Qualifying')}
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6`}>
             {groupPools.map((pool) =>
               qualifyingMatchesByPool[pool]?.length > 0 ? (
                 <div key={pool}>
@@ -1466,12 +1443,12 @@ const MatchesPage = () => {
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h3 className="text-2xl font-bold text-gray-900">
-                {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
-                {selectedRound === 'Third Place' && 'Third Place Match'}
-                {selectedRound === 'Level 2' && 'Level 2 - Qualifying Matches'}
                 {selectedRound === 'Level 1B' && 'Level 1B - Cross-group Matches'}
+                {selectedRound === 'Level 2' && 'Level 2 - Qualifying Matches'}
                 {selectedRound === 'Level 3' && 'Level 3 - Crossover Matches'}
+                {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
                 {selectedRound === 'Semi Final' && 'Semi Final Matches'}
+                {selectedRound === 'Third Place' && 'Third Place Match'}
                 {selectedRound === 'Final' && 'Final Match'}
               </h3>
               {renderLevelAutoFillButton(selectedRound, selectedRound)}
@@ -1525,7 +1502,7 @@ const MatchesPage = () => {
               {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'waiting' &&
                 'Complete all S1 groups to unlock Level 1B.'}
               {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'ready' &&
-                'S1 is complete — an admin must activate Level 1B.'}
+                'S1 is complete - an admin must activate Level 1B.'}
               {isTierPyramid &&
                 !['Semi Final', 'Final', 'Level 1B'].includes(selectedRound) &&
                 'Complete earlier pyramid stages to unlock this round.'}

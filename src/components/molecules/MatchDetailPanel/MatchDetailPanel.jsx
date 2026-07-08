@@ -33,7 +33,7 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
 
   return (
     <div className="space-y-5">
-      <div className="p-4 bg-gray-50 rounded-lg flex flex-wrap items-center justify-between gap-2">
+      <div className="p-4 bg-gray-100 rounded-lg flex flex-wrap items-center justify-between gap-2">
         <div className="w-full flex flex-wrap items-center justify-between gap-2">
           <MatchStageBadge match={match} />
           <Badge variant={isCompleted ? 'success' : 'warning'}>{match.status}</Badge>
@@ -59,13 +59,13 @@ const MatchDetailPanel = ({ match, setConfig = null }) => {
         </div> 
         */}
         {match.pool && (
-          <div className="flex items-center justify-between gap-2 p-1 bg-gray-100 rounded-lg">
+          <div className="flex items-center justify-between gap-2 p-2 bg-gray-100 rounded-lg">
             <dt className="text-gray-500">Group</dt>
             <dd className="font-medium text-gray-900">Pool {match.pool}</dd>
           </div>
         )}
         {match.division && (
-          <div className="flex items-center justify-between gap-2 p-1 bg-gray-100 rounded-lg">
+          <div className="flex items-center justify-between gap-2 p-2 bg-gray-100 rounded-lg">
             <dt className="text-gray-500">Division</dt>
             <dd className="font-medium text-gray-900">{match.division}</dd>
           </div>

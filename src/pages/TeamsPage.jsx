@@ -434,18 +434,13 @@ const TeamsPage = () => {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const activeTeams = useMemo(
     () =>
-      normalizedQuery
-        ? divisionTeams.filter((team) =>
-            [
-              normalizeTeamName(team.team_name, selectedDivision),
-              team.team_name,
-              team.player1_name,
-              team.player2_name,
-            ]
-              .filter(Boolean)
-              .some((field) => String(field).toLowerCase().includes(normalizedQuery))
-          )
-        : divisionTeams,
+      normalizedQuery ? divisionTeams.filter((team) => [
+        normalizeTeamName(team.team_name, selectedDivision),
+        team.team_name,
+        team.player1_name,
+        team.player2_name,
+      ].filter(Boolean).some((field) => String(field).toLowerCase().includes(normalizedQuery))
+      ) : divisionTeams,
     [divisionTeams, normalizedQuery, selectedDivision]
   );
 
@@ -464,8 +459,8 @@ const TeamsPage = () => {
           <h2 className="text-3xl font-bold text-gray-900">Teams</h2>
           <p className="text-gray-600 mt-1">
             {isAdmin
-              ? 'Manage teams per division — each division has its own generation and tournament flow'
-              : 'Browse teams per division — read-only view'}
+              ? 'Manage teams per division - each division has its own generation and tournament flow'
+              : 'Browse teams per division - read-only view'}
           </p>
         </div>
         {isAdmin && (
@@ -540,7 +535,7 @@ const TeamsPage = () => {
                 Competition: <span className="font-medium">{getCompetitionFormatLabel(selectedCompetitionFormat)}</span>
                 {' · '}
                 Tournament: <span className="font-medium">{getTournamentFormatLabel(selectedTournamentFormat)}</span>
-                {' — '}
+                {' - '}
                 Generate and save {entrantLabel} for this division only.
               </p>
             </div>
