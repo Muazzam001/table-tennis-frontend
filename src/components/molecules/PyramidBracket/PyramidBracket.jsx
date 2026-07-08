@@ -82,7 +82,7 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Parallel Level 1A (S1 groups) and S3 (Tier 1) run together. Top 2 per group enter Level 1B; top 4 advance to Level 2.
+        Parallel Level 1A (S1) and S2  run together. Top 4 per group enter Level 1B; top 4 advance to Level 2.
       </p>
       <div className="overflow-x-auto pb-2 space-y-4">
         <StageColumn

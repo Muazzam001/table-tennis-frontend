@@ -61,8 +61,8 @@ const KNOCKOUT_ROUND_TABS = [
 
 const PYRAMID_ROUND_TABS = [
   { value: 'Level 1A', label: 'Level 1A (S1)' },
-  { value: 'Level 1B', label: 'Level 1B' },
-  { value: 'S3', label: 'S3 (Tier 1)' },
+  { value: 'Level 1B', label: 'Level 1B (S1)' },
+  { value: 'S3', label: 'Level 1C (S2)' },
   { value: 'Level 2', label: 'Level 2' },
   { value: 'Level 3', label: 'Level 3' },
   { value: 'Semi Final', label: 'Semi Finals' },
@@ -1149,9 +1149,9 @@ const MatchesPage = () => {
             {isAdmin
               ? ' Enter results to unlock Level 2+.'
               : ' Later levels unlock as results are entered.'} <br />
-            <strong>Level 1A</strong> (S1 groups) and <strong>S3</strong> (Tier 1 round-robin) run in parallel.
+            <strong>S1</strong> (group play) and <strong>S2</strong> (Tier 1 round-robin) run in parallel.
             <br />
-            Top 2 per group advance to <strong>Level 1B</strong>, then top 4 advance to Level 2.
+            Top 4 per group advance to <strong>Level 1B</strong>, then top 4 advance to Level 2.
           </p>
           <p>
             Scheduled: <strong>{level1Summary.total}</strong>
@@ -1178,8 +1178,8 @@ const MatchesPage = () => {
           {level1aMatches.length > 0 && selectedRound === 'Level 1A' && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-2xl font-bold text-gray-900">Level 1A - S1 Groups</h3>
-                {renderLevelAutoFillButton('Level 1A', 'Level 1A')}
+                <h3 className="text-2xl font-bold text-gray-900">S1 — Group play</h3>
+                {renderLevelAutoFillButton('Level 1A', 'S1')}
               </div>
 
               {groupPools.length > 0 && (
@@ -1212,8 +1212,8 @@ const MatchesPage = () => {
           {selectedRound === 'S3' && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-2xl font-bold text-gray-900">S3 - Tier 1 Round-robin</h3>
-                {renderLevelAutoFillButton('S3', 'S3')}
+                <h3 className="text-2xl font-bold text-gray-900">S2 — Tier 1 round-robin</h3>
+                {renderLevelAutoFillButton('S3', 'S2')}
               </div>
               {s2RoundGroups.length > 0 ? (
                 s2RoundGroups.map((round) => (
@@ -1251,8 +1251,8 @@ const MatchesPage = () => {
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <p className="text-amber-900 font-medium">
                     {level1bStatus === 'waiting'
-                      ? 'Complete all Level 1A groups to unlock Level 1B.'
-                      : 'Level 1A is complete — Level 1B is ready to activate.'}
+                      ? 'Complete all S1 groups to unlock Level 1B.'
+                      : 'S1 is complete — Level 1B is ready to activate.'}
                   </p>
                   {level1bStatus === 'ready' && isAdmin && (
                     <Button
@@ -1508,9 +1508,9 @@ const MatchesPage = () => {
               {isTierPyramid && selectedRound === 'Semi Final' && 'Complete Level 3 to generate Semi Finals.'}
               {isTierPyramid && selectedRound === 'Final' && 'Complete Semi Finals to generate the Final.'}
               {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'waiting' &&
-                'Complete all Level 1A groups to unlock Level 1B.'}
+                'Complete all S1 groups to unlock Level 1B.'}
               {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'ready' &&
-                'Level 1A is complete - an admin must activate Level 1B.'}
+                'S1 is complete — an admin must activate Level 1B.'}
               {isTierPyramid &&
                 !['Semi Final', 'Final', 'Level 1B'].includes(selectedRound) &&
                 'Complete earlier pyramid stages to unlock this round.'}

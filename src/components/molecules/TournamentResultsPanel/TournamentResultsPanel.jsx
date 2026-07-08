@@ -60,7 +60,9 @@ const TournamentResultsPanel = ({
   const [activeTab, setActiveTab] = useState('standings');
 
   const isPyramid = isTierPyramidFormat(overview?.format || overview?.tournament_format);
-  const qualifiersCount = overview?.config?.qualifiersPerGroup || (isPyramid ? 2 : 2);
+  const qualifiersCount =
+    overview?.config?.qualifiersPerGroup ||
+    (isPyramid ? overview?.config?.s1QualifiersPerGroup || 4 : 2);
   const isSingleGroup = overview?.config?.isSingleGroup || overview?.format === 'single-group';
   const teamCount = overview?.config?.participantCount || overview?.config?.tier1Count + overview?.config?.tier2Count + overview?.config?.tier3Count || 0;
   const standings = overview?.standings || {};
@@ -208,7 +210,7 @@ const TournamentResultsPanel = ({
             variant={activeTab === 'standings' ? 'primary' : 'outline'}
             size="sm"
           >
-            {isPyramid ? 'Level 1A Standings' : 'Group Standings'}
+            {isPyramid ? 'S1 Standings' : 'Group Standings'}
           </Button>
         )}
 
@@ -228,7 +230,7 @@ const TournamentResultsPanel = ({
             variant={activeTab === 's2' ? 'primary' : 'outline'}
             size="sm"
           >
-            S3 Standings
+            S2 Standings
           </Button>
         )}
 
@@ -273,7 +275,7 @@ const TournamentResultsPanel = ({
               groupId={groupId}
               standings={standings[groupId] || []}
               qualifiersCount={qualifiersCount}
-              qualifierLabel={isPyramid ? 'Top 2 → Level 1B' : undefined}
+              qualifierLabel={isPyramid ? 'Top 4 → Level 1B' : undefined}
             />
           ))}
         </div>
