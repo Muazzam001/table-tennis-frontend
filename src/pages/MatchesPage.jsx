@@ -1419,26 +1419,28 @@ const MatchesPage = () => {
             <h3 className="text-2xl font-bold text-gray-900">Qualifying Round</h3>
             {renderLevelAutoFillButton('Qualifying', 'Qualifying')}
           </div>
-          {groupPools.map((pool) =>
-            qualifyingMatchesByPool[pool]?.length > 0 ? (
-              <div key={pool}>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Group {pool} Matches</h3>
-                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
-                  {qualifyingMatchesByPool[pool].map((match) => (
-                    <MatchCard
-                      key={match.id}
-                      match={match}
-                      onUpdateResult={handleUpdateResult}
-                      onViewDetails={handleViewMatch}
-                      isAdmin={isAdmin}
-                      teamTiers={teamTierMap}
-                      setConfig={setConfig}
-                    />
-                  ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {groupPools.map((pool) =>
+              qualifyingMatchesByPool[pool]?.length > 0 ? (
+                <div key={pool}>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Group {pool} Matches</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
+                    {qualifyingMatchesByPool[pool].map((match) => (
+                      <MatchCard
+                        key={match.id}
+                        match={match}
+                        onUpdateResult={handleUpdateResult}
+                        onViewDetails={handleViewMatch}
+                        isAdmin={isAdmin}
+                        teamTiers={teamTierMap}
+                        setConfig={setConfig}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : null
-          )}
+              ) : null
+            )}
+          </div>
         </div>
       )}
 
@@ -1459,7 +1461,7 @@ const MatchesPage = () => {
               </h3>
               {renderLevelAutoFillButton(selectedRound, selectedRound)}
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 4xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {filteredMatches.map((match) => (
                 <MatchCard
                   key={match.id}
