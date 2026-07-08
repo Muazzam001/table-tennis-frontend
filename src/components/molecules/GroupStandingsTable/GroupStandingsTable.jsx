@@ -14,7 +14,11 @@ const GroupStandingsTable = ({
   showSourceGroup = false,
 }) => (
   <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-    <h3 className="text-xl font-bold text-gray-900 mb-4">Group {groupId} Standings</h3>
+    <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+      <h3 className="text-xl font-bold text-gray-900">Group {groupId} Standings ({qualifiersCount})</h3>
+      <p className="text-xs text-gray-500 mt-2">{qualifierLabel || 'teams qualify for knockout stage'} </p>
+    </div>
+
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -26,7 +30,7 @@ const GroupStandingsTable = ({
             <th className="text-center p-2">W</th>
             <th className="text-center p-2">L</th>
             <th className="text-center p-2">Pts</th>
-            <th className="text-center p-2" title="Set GD — NRR-style: (sets won per match) − (sets lost per match)">
+            <th className="text-center p-2" title="Set GD - NRR-style: (sets won per match) − (sets lost per match)">
               GD / NRR
             </th>
           </tr>
@@ -66,10 +70,9 @@ const GroupStandingsTable = ({
         </tbody>
       </table>
       <p className="text-xs text-gray-500 mt-2">
-        Top {qualifiersCount} {qualifierLabel || 'teams qualify for knockout stage'}. GD uses NRR-style set rates
-        (sets won per match − sets lost per match). Tie-break order: points → set GD → game-point GD → margin
-        quality (knockout/shutout) → dominance → mini-league → head-to-head. Game length (11 or 21) is set on
-        the Matches page; enter per-set scores for accurate tie-breaks.
+        GD uses NRR-style set rates (sets won per match − sets lost per match). <br />
+        Tie-break order: points → set GD → game-point GD → margin quality (knockout/shutout) → dominance → mini-league → head-to-head. <br />
+        Game length (11 or 21) is set on the Matches page; enter per-set scores for accurate tie-breaks.
       </p>
     </div>
   </div>

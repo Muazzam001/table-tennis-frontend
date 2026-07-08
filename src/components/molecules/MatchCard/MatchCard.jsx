@@ -86,7 +86,7 @@ const MatchCard = ({
               </span>
             </p>
           )} */}
-          
+
           {isAdmin && (
             <div className="flex flex-wrap gap-4 items-center justify-between">
               <p>📅 {formatDate(match.scheduled_date)}</p>
@@ -95,27 +95,30 @@ const MatchCard = ({
           )}
         </div>
 
-        {/* Action Button */}
-        {showActions && isAdmin && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateResult(match)}
-            className="w-full"
-          >
-            {isCompleted ? 'Edit Match' : 'Update Match'}
-          </Button>
-        )}
-        {showActions && !isAdmin && onViewDetails && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewDetails(match)}
-            className="w-full"
-          >
-            View details
-          </Button>
-        )}
+        <div className="mt-auto">
+          {/* Action Button */}
+          {showActions && isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateResult(match)}
+              className="w-full"
+            >
+              {isCompleted ? 'Edit Match' : 'Update Match'}
+            </Button>
+          )}
+          {showActions && !isAdmin && onViewDetails && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewDetails(match)}
+              className="w-full"
+            >
+              View details
+            </Button>
+          )}
+        </div>
+
       </div>
     </div>
   );
