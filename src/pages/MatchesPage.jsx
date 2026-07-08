@@ -45,7 +45,7 @@ import {
 } from '@/utils/level1Matches';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
 import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
-import { deriveLevel1bStatus, derivePyramidTournamentStatus } from '@shared/tournament/formats/tierPyramid/advancement.js';
+import { deriveLevel1bStatus, derivePyramidTournamentStatus, getLevel1BRoundMatches } from '@shared/tournament/formats/tierPyramid/advancement.js';
 import { filterMatchesForPyramidRound } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -145,6 +145,10 @@ const MatchesPage = () => {
   );
   const level1bMatches = useMemo(
     () => divisionMatches.filter((m) => m.round_type === 'Level 1B'),
+    [divisionMatches]
+  );
+  const level1bRounds = useMemo(
+    () => getLevel1BRoundMatches(divisionMatches),
     [divisionMatches]
   );
   const level1Matches = useMemo(
@@ -1267,21 +1271,32 @@ const MatchesPage = () => {
                 </div>
               )}
 
-              {level1bMatches.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-4 gap-6">
-                  {level1bMatches.map((match) => (
-                    <MatchCard
-                      key={match.id}
-                      match={match}
-                      onUpdateResult={handleUpdateResult}
-                      onViewDetails={handleViewMatch}
-                      isAdmin={isAdmin}
-                      teamTiers={teamTierMap}
-                      setConfig={setConfig}
-                    />
-                  ))}
+              {level1bMatches.length > 0 && level1bRounds.map((roundMatches, roundIndex) => (
+                <div key={`l1b-round-${roundIndex}`} className="space-y-3">
+                  {level1bRounds.length > 1 && (
+                    <h4 className="text-lg font-semibold text-gray-700">
+                      {roundIndex === 0
+                        ? `Round 1 — Cross-group (${roundMatches.length} matches)`
+                        : roundIndex === level1bRounds.length - 1
+                          ? `Round ${roundIndex + 1} — Winners' crossover (${roundMatches.length} matches)`
+                          : `Round ${roundIndex + 1} (${roundMatches.length} matches)`}
+                    </h4>
+                  )}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-4 gap-6">
+                    {roundMatches.map((match) => (
+                      <MatchCard
+                        key={match.id}
+                        match={match}
+                        onUpdateResult={handleUpdateResult}
+                        onViewDetails={handleViewMatch}
+                        isAdmin={isAdmin}
+                        teamTiers={teamTierMap}
+                        setConfig={setConfig}
+                      />
+                    ))}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
