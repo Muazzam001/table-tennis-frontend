@@ -5,9 +5,9 @@ import DivisionTabs from '@/components/molecules/DivisionTabs';
 import MatchCard from '@/components/molecules/MatchCard';
 import MatchDetailPanel from '@/components/molecules/MatchDetailPanel';
 import MatchResultForm from '@/components/molecules/MatchResultForm';
-import SearchInput from '@/components/molecules/SearchInput';
 import PyramidAdminPanel from '@/components/molecules/PyramidAdminPanel/PyramidAdminPanel';
 import ScheduleWizard from '@/components/molecules/ScheduleWizard';
+import SearchInput from '@/components/molecules/SearchInput';
 import TierAssignmentPanel from '@/components/molecules/TierAssignmentPanel/TierAssignmentPanel';
 import TierPyramidConfigPanel from '@/components/molecules/TierPyramidConfigPanel/TierPyramidConfigPanel';
 import TierPyramidSetupPanel from '@/components/molecules/TierPyramidSetupPanel/TierPyramidSetupPanel';
@@ -37,15 +37,15 @@ import {
   updateMatchResult
 } from '@/services/matchService';
 import { getTeams, updateTeam } from '@/services/teamService';
-import { assignPyramidTiers, activateLevel1B, getPyramidProgressionLog, getPyramidTiers, overridePyramidAdvancement, regeneratePyramidStage } from '@/services/tierPyramidService';
+import { activateLevel1B, assignPyramidTiers, getPyramidProgressionLog, getPyramidTiers, overridePyramidAdvancement, regeneratePyramidStage } from '@/services/tierPyramidService';
 import { getTournamentSetup } from '@/services/tournamentService';
+import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
+import { buildLevel1BRoundsView } from '@/utils/level1bPairingLabels';
 import {
   groupMatchesByRoundRobinRounds,
   summarizeLevel1Schedule,
 } from '@/utils/level1Matches';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
-import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
-import { buildLevel1BRoundsView } from '@/utils/level1bPairingLabels';
 import { deriveLevel1bStatus, derivePyramidTournamentStatus, getLevel1BRoundMatches } from '@shared/tournament/formats/tierPyramid/advancement.js';
 import { filterMatchesForPyramidRound } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';

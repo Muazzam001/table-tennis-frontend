@@ -120,7 +120,7 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
               {view.l1b.rounds.map((round) => (
                 <div key={`l1b-bracket-round-${round.roundNumber}`}>
                   <p className="text-xs font-semibold text-teal-900 mb-2">{round.title}</p>
-                  <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-2">
                     {round.matches.map((m) => (
                       <BracketMatchCard key={m.id} match={m} accent="bg-white/80 border-teal-100" />
                     ))}
@@ -179,7 +179,7 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
             hasL2 ? (
               <>
                 {view.l2.matches.length > 0 && (
-                  <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-2">
+                  <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-2">
                     {view.l2.matches.map((m) => (
                       <BracketMatchCard
                         key={m.id}
@@ -205,7 +205,7 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
           locked={!hasL3}
         >
           {hasL3 ? (
-            <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+            <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-2">
               {view.l3.matches.map((m) => (
                 <BracketMatchCard key={m.id} match={m} accent="bg-white/80 border-red-100" />
               ))}

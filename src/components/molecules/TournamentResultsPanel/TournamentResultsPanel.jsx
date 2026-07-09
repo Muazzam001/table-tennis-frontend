@@ -1,14 +1,15 @@
 import Button from '@/components/atoms/Button';
 import { isTierPyramidFormat } from '@/constants/tournamentFormats';
+import { useAuth } from '@/contexts/AuthContext';
+import { buildPyramidBracketView } from '@/utils/pyramidBracket';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import GroupStandingsTable from '../GroupStandingsTable/GroupStandingsTable';
 import KnockoutBracket from '../KnockoutBracket/KnockoutBracket';
 import KnockoutResultsList from '../KnockoutResultsList';
+import Level1BBracketRound from '../Level1BBracketRound/Level1BBracketRound';
 import ProgressionLogPanel from '../ProgressionLogPanel/ProgressionLogPanel';
 import PyramidBracket from '../PyramidBracket/PyramidBracket';
-import Level1BBracketRound from '../Level1BBracketRound/Level1BBracketRound';
-import { buildPyramidBracketView } from '@/utils/pyramidBracket';
 
 const PYRAMID_RESULT_ROUNDS = [
   'S1',
@@ -59,6 +60,8 @@ const TournamentResultsPanel = ({
   teams = [],
   readOnly = false,
 }) => {
+  const { isAdmin } = useAuth();
+
   const [activeTab, setActiveTab] = useState('standings');
   const [bracketView, setBracketView] = useState('full');
 
@@ -254,7 +257,7 @@ const TournamentResultsPanel = ({
           {isPyramid ? 'Match Results' : 'Knockout Results'}
         </Button>
 
-        {isPyramid && progressionLog.length > 0 && (
+        {isAdmin && isPyramid && progressionLog.length > 0 && (
           <Button
             onClick={() => setActiveTab('progression')}
             variant={activeTab === 'progression' ? 'primary' : 'outline'}
