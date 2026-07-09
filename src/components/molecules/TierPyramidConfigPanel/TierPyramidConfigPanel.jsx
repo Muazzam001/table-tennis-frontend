@@ -27,7 +27,7 @@ const TierPyramidConfigPanel = ({
   return (
     <div className="bg-white border border-violet-200 rounded-lg p-4 space-y-3">
       <div>
-        <h3 className="font-semibold text-gray-900">Pyramid configuration — {divisionLabel}</h3>
+        <h3 className="font-semibold text-gray-900">Pyramid configuration - {divisionLabel}</h3>
         <p className="text-sm text-gray-600 mt-1">
           {isDerived
             ? 'Configuration auto-derived from your roster tier counts.'
@@ -50,8 +50,12 @@ const TierPyramidConfigPanel = ({
           </div>
         </div>
         <div className="bg-gray-50 rounded px-3 py-2">
+          <div className="text-gray-500">S1 → L1B</div>
+          <div className="font-medium">Top {config.s1QualifiersPerGroup} per group</div>
+        </div>
+        <div className="bg-gray-50 rounded px-3 py-2">
           <div className="text-gray-500">L2 bracket</div>
-          <div className="font-medium">{matchCounts?.level2Entrants ?? '—'} entrants</div>
+          <div className="font-medium">{matchCounts?.level2Entrants ?? '-'} entrants</div>
         </div>
         <div className="bg-gray-50 rounded px-3 py-2">
           <div className="text-gray-500">Semi-finals</div>
