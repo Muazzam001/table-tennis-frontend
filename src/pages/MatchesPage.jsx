@@ -45,6 +45,7 @@ import {
 } from '@/utils/level1Matches';
 import { showConfirm, showSuccess } from '@/utils/sweetAlert';
 import { CACHE_KEYS, getCached, hasCached, setCached } from '@/utils/dataCache';
+import { buildLevel1BRoundsView } from '@/utils/level1bPairingLabels';
 import { deriveLevel1bStatus, derivePyramidTournamentStatus, getLevel1BRoundMatches } from '@shared/tournament/formats/tierPyramid/advancement.js';
 import { filterMatchesForPyramidRound } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -61,7 +62,8 @@ const KNOCKOUT_ROUND_TABS = [
 
 const PYRAMID_ROUND_TABS = [
   { value: 'Level 1A', label: 'Level 1A (S1)' },
-  { value: 'Level 1B', label: 'Level 1B (S1)' },
+  { value: 'Level 1B R1', label: 'L1B Round 1' },
+  { value: 'Level 1B R2', label: 'L1B Round 2' },
   { value: 'S3', label: 'Level 1C (S2)' },
   { value: 'Level 2', label: 'Level 2' },
   { value: 'Level 3', label: 'Level 3' },
@@ -72,11 +74,14 @@ const PYRAMID_ROUND_TABS = [
 
 const roundHasMatches = (divisionMatches, roundValue, isPyramid) => {
   if (isPyramid) {
-    if (roundValue === 'Level 1B') {
+    if (roundValue === 'Level 1B R1') {
       return (
         divisionMatches.some((m) => m.round_type === 'S1') ||
-        filterMatchesForPyramidRound(divisionMatches, roundValue).length > 0
+        getLevel1BRoundMatches(divisionMatches)[0]?.length > 0
       );
+    }
+    if (roundValue === 'Level 1B R2') {
+      return getLevel1BRoundMatches(divisionMatches)[1]?.length > 0;
     }
     return filterMatchesForPyramidRound(divisionMatches, roundValue).length > 0;
   }
@@ -147,10 +152,6 @@ const MatchesPage = () => {
     () => divisionMatches.filter((m) => m.round_type === 'Level 1B'),
     [divisionMatches]
   );
-  const level1bRounds = useMemo(
-    () => getLevel1BRoundMatches(divisionMatches),
-    [divisionMatches]
-  );
   const level1Matches = useMemo(
     () => [...level1aMatches, ...s3Matches],
     [level1aMatches, s3Matches]
@@ -164,6 +165,10 @@ const MatchesPage = () => {
   const pyramidAdminTeams = (pyramidTierState?.teams || divisionTeams).map((t) => ({
     ...t, tier: tierAssignments[t.id] ?? t.tier,
   }));
+  const level1bRoundsView = useMemo(
+    () => buildLevel1BRoundsView(level1bMatches, pyramidAdminTeams),
+    [level1bMatches, pyramidAdminTeams]
+  );
   const level1bStatus = isTierPyramid
     ? deriveLevel1bStatus(divisionMatches, {}, pyramidAdminTeams)
     : 'waiting';
@@ -1220,49 +1225,66 @@ const MatchesPage = () => {
             </div>
           )}
 
-          {selectedRound === 'Level 1B' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-2xl font-bold text-gray-900">Level 1B - Cross-group Qualifiers</h3>
-                {level1bMatches.length > 0 && renderLevelAutoFillButton('Level 1B', 'Level 1B')}
-              </div>
+          {(selectedRound === 'Level 1B R1' || selectedRound === 'Level 1B R2') && (() => {
+            const isR1 = selectedRound === 'Level 1B R1';
+            const roundIndex = isR1 ? 0 : 1;
+            const round = level1bRoundsView[roundIndex];
 
-              {(level1bStatus === 'waiting' || level1bStatus === 'ready') && level1bMatches.length === 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                  <p className="text-amber-900 font-medium">
-                    {level1bStatus === 'waiting'
-                      ? 'Complete all S1 groups to unlock Level 1B.'
-                      : 'S1 is complete — Level 1B is ready to activate.'}
-                  </p>
-                  {level1bStatus === 'ready' && isAdmin && (
-                    <Button
-                      className="mt-3"
-                      variant="primary"
-                      onClick={handleActivateLevel1B}
-                      disabled={activatingLevel1B}
-                    >
-                      {activatingLevel1B ? 'Activating…' : 'Activate Level 1B'}
-                    </Button>
-                  )}
+            return (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">
+                      {isR1 ? 'Level 1B — Round 1' : 'Level 1B — Round 2'}
+                    </h3>
+                    {round?.subtitle && (
+                      <p className="text-sm text-gray-600 mt-1">{round.subtitle}</p>
+                    )}
+                  </div>
+                  {round?.matches?.length > 0 &&
+                    renderLevelAutoFillButton(selectedRound, selectedRound)}
                 </div>
-              )}
 
-              {level1bMatches.length > 0 && level1bRounds.map((roundMatches, roundIndex) => (
-                <div key={`l1b-round-${roundIndex}`} className="space-y-3">
-                  {level1bRounds.length > 1 && (
-                    <h4 className="text-lg font-semibold text-gray-700">
-                      {roundIndex === 0
-                        ? `Round 1 — Cross-group (${roundMatches.length} matches)`
-                        : roundIndex === level1bRounds.length - 1
-                          ? `Round ${roundIndex + 1} — Winners' crossover (${roundMatches.length} matches)`
-                          : `Round ${roundIndex + 1} (${roundMatches.length} matches)`}
-                    </h4>
+                {isR1 &&
+                  (level1bStatus === 'waiting' || level1bStatus === 'ready') &&
+                  level1bMatches.length === 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <p className="text-amber-900 font-medium">
+                        {level1bStatus === 'waiting'
+                          ? 'Complete all S1 groups to unlock Level 1B.'
+                          : 'S1 is complete — Level 1B is ready to activate.'}
+                      </p>
+                      {level1bStatus === 'ready' && isAdmin && (
+                        <Button
+                          className="mt-3"
+                          variant="primary"
+                          onClick={handleActivateLevel1B}
+                          disabled={activatingLevel1B}
+                        >
+                          {activatingLevel1B ? 'Activating…' : 'Activate Level 1B'}
+                        </Button>
+                      )}
+                    </div>
                   )}
+
+                {!isR1 && (!round || round.matches.length === 0) && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p className="text-amber-900 font-medium">
+                      Round 2 appears after all Round 1 cross-group matches are completed.
+                    </p>
+                    <p className="text-amber-800 text-sm mt-1">
+                      Pairings: Winner (A1·B4) vs Winner (C1·D4), and matching slots for A2·B3, A3·B2, A4·B1.
+                    </p>
+                  </div>
+                )}
+
+                {round?.matches?.length > 0 && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 3xl:grid-cols-4 gap-6">
-                    {roundMatches.map((match) => (
+                    {round.matches.map((match) => (
                       <MatchCard
                         key={match.id}
                         match={match}
+                        pairingHint={match.pairingHint}
                         onUpdateResult={handleUpdateResult}
                         onViewDetails={handleViewMatch}
                         isAdmin={isAdmin}
@@ -1271,10 +1293,10 @@ const MatchesPage = () => {
                       />
                     ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
 
         </>
       )}
@@ -1411,7 +1433,7 @@ const MatchesPage = () => {
             {renderLevelAutoFillButton('Qualifying', 'Qualifying')}
           </div>
 
-          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6`}>
+          <div className={`grid grid-cols-1 gap-6`}>
             {groupPools.map((pool) =>
               qualifyingMatchesByPool[pool]?.length > 0 ? (
                 <div key={pool}>
@@ -1438,12 +1460,11 @@ const MatchesPage = () => {
 
       {/* Knockout & pyramid rounds L2+ (flat list) */}
       {!loading &&
-        !['Qualifying', 'Level 1', 'Level 1A', 'Level 1B', 'S3'].includes(selectedRound) &&
+        !['Qualifying', 'Level 1', 'Level 1A', 'Level 1B R1', 'Level 1B R2', 'S3'].includes(selectedRound) &&
         filteredMatches.length > 0 && (
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h3 className="text-2xl font-bold text-gray-900">
-                {selectedRound === 'Level 1B' && 'Level 1B - Cross-group Matches'}
                 {selectedRound === 'Level 2' && 'Level 2 - Qualifying Matches'}
                 {selectedRound === 'Level 3' && 'Level 3 - Crossover Matches'}
                 {selectedRound === 'Quarter Final' && 'Quarter Final Matches'}
@@ -1499,12 +1520,14 @@ const MatchesPage = () => {
               {!isTierPyramid && selectedRound === 'Final' && 'Complete prior rounds to generate the Final.'}
               {isTierPyramid && selectedRound === 'Semi Final' && 'Complete Level 3 to generate Semi Finals.'}
               {isTierPyramid && selectedRound === 'Final' && 'Complete Semi Finals to generate the Final.'}
-              {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'waiting' &&
+              {isTierPyramid && selectedRound === 'Level 1B R1' && level1bStatus === 'waiting' &&
                 'Complete all S1 groups to unlock Level 1B.'}
-              {isTierPyramid && selectedRound === 'Level 1B' && level1bStatus === 'ready' &&
+              {isTierPyramid && selectedRound === 'Level 1B R1' && level1bStatus === 'ready' &&
                 'S1 is complete - an admin must activate Level 1B.'}
+              {isTierPyramid && selectedRound === 'Level 1B R2' &&
+                'Complete all Round 1 Level 1B matches to unlock Round 2.'}
               {isTierPyramid &&
-                !['Semi Final', 'Final', 'Level 1B'].includes(selectedRound) &&
+                !['Semi Final', 'Final', 'Level 1B R1', 'Level 1B R2'].includes(selectedRound) &&
                 'Complete earlier pyramid stages to unlock this round.'}
             </p>
           </div>
