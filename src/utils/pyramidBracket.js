@@ -14,7 +14,7 @@ const STAGE_META = {
   SF: { label: 'Semi Finals', subtitle: '4 → 2', accent: 'border-orange-300 bg-orange-50' },
   ThirdPlace: {
     label: 'Third Place',
-    subtitle: 'Semi-final losers',
+    subtitle: 'Semi-final',
     accent: 'border-amber-300 bg-amber-50',
   },
   Final: { label: 'Final', subtitle: 'Championship', accent: 'border-purple-300 bg-purple-50' },
@@ -30,12 +30,10 @@ export function buildPyramidBracketView(overview) {
   const entrantMap = Object.fromEntries(entrants.map((e) => [e.id, e]));
 
   const s1Matches = matches.filter((m) => m.round_type === 'S1');
-  const l1bMatches = matches
-    .filter((m) => m.round_type === 'Level 1B')
+  const l1bMatches = matches.filter((m) => m.round_type === 'Level 1B')
     .sort((a, b) => (a.stage_sequence ?? 0) - (b.stage_sequence ?? 0));
   const s2Matches = matches.filter((m) => m.round_type === 'S2');
-  const l2Matches = matches
-    .filter((m) => m.round_type === 'Level 2')
+  const l2Matches = matches.filter((m) => m.round_type === 'Level 2')
     .sort((a, b) => (a.stage_sequence ?? 0) - (b.stage_sequence ?? 0));
   const l3Matches = getLevel3Matches(matches).sort(
     (a, b) => (a.stage_sequence ?? 0) - (b.stage_sequence ?? 0)
