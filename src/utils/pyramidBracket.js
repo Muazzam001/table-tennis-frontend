@@ -2,6 +2,8 @@ import {
   getLevel3Matches,
   getPyramidSemiFinalMatches,
 } from '@shared/tournament/formats/tierPyramid/roundFilters.js';
+import { getLevel1BRoundMatches } from '@shared/tournament/formats/tierPyramid/advancement.js';
+import { buildLevel1BRoundsView } from './level1bPairingLabels.js';
 
 const STAGE_META = {
   S1: { label: 'Level 1A (S1)', subtitle: 'Tier 2 & 3 groups', accent: 'border-green-300 bg-green-50' },
@@ -58,10 +60,20 @@ export function buildPyramidBracketView(overview) {
     team2_source: entrantMap[match.team2_id]?.advancement_source,
   });
 
+  const l1bRounds = buildLevel1BRoundsView(l1bMatches, entrants).map((round) => ({
+    ...round,
+    matches: round.matches.map(enrich),
+  }));
+
   return {
     stages: STAGE_META,
     s1: { groups: s1Groups, matches: s1Matches.map(enrich) },
-    l1b: { matches: l1bMatches.map(enrich), standings: overview?.pyramid?.l1bStandings || [] },
+    l1b: {
+      matches: l1bMatches.map(enrich),
+      rounds: l1bRounds,
+      roundCount: getLevel1BRoundMatches(l1bMatches).length,
+      standings: overview?.pyramid?.l1bStandings || [],
+    },
     s2: { matches: s2Matches.map(enrich), standings: overview?.pyramid?.s2Standings || [] },
     l2: { matches: l2Matches.map(enrich) },
     l3: { matches: l3Matches.map(enrich) },

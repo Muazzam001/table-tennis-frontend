@@ -7,6 +7,8 @@ import KnockoutBracket from '../KnockoutBracket/KnockoutBracket';
 import KnockoutResultsList from '../KnockoutResultsList';
 import ProgressionLogPanel from '../ProgressionLogPanel/ProgressionLogPanel';
 import PyramidBracket from '../PyramidBracket/PyramidBracket';
+import Level1BBracketRound from '../Level1BBracketRound/Level1BBracketRound';
+import { buildPyramidBracketView } from '@/utils/pyramidBracket';
 
 const PYRAMID_RESULT_ROUNDS = [
   'S1',
@@ -58,6 +60,7 @@ const TournamentResultsPanel = ({
   readOnly = false,
 }) => {
   const [activeTab, setActiveTab] = useState('standings');
+  const [bracketView, setBracketView] = useState('full');
 
   const isPyramid = isTierPyramidFormat(overview?.format || overview?.tournament_format);
   const qualifiersCount =
@@ -79,6 +82,7 @@ const TournamentResultsPanel = ({
   const l1bStandings = overview?.pyramid?.l1bStandings || [];
   const level1bStatus = overview?.pyramid?.level1bStatus || '';
   const progressionLog = overview?.pyramid?.progressionLog || [];
+  const pyramidBracketView = isPyramid ? buildPyramidBracketView(overview) : null;
 
   const formatSummary = (() => {
     if (isPyramid && overview?.config) {
@@ -303,8 +307,46 @@ const TournamentResultsPanel = ({
       {activeTab === 'bracket' && (
         <>
           {isPyramid ? (
-            <div className="bg-white rounded-lg shadow border border-gray-200 p-5">
-              <PyramidBracket overview={overview} readOnly={readOnly} />
+            <div className="bg-white rounded-lg shadow border border-gray-200 p-5 space-y-4">
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  onClick={() => setBracketView('full')}
+                  variant={bracketView === 'full' ? 'primary' : 'outline'}
+                  size="sm"
+                >
+                  Full Pyramid
+                </Button>
+                <Button
+                  onClick={() => setBracketView('l1b-r1')}
+                  variant={bracketView === 'l1b-r1' ? 'primary' : 'outline'}
+                  size="sm"
+                >
+                  L1B Round 1
+                </Button>
+                <Button
+                  onClick={() => setBracketView('l1b-r2')}
+                  variant={bracketView === 'l1b-r2' ? 'primary' : 'outline'}
+                  size="sm"
+                >
+                  L1B Round 2
+                </Button>
+              </div>
+
+              {bracketView === 'full' && (
+                <PyramidBracket overview={overview} readOnly={readOnly} />
+              )}
+              {bracketView === 'l1b-r1' && (
+                <Level1BBracketRound
+                  round={pyramidBracketView?.l1b?.rounds?.[0]}
+                  emptyMessage="Level 1B Round 1 will appear after Level 1B is activated."
+                />
+              )}
+              {bracketView === 'l1b-r2' && (
+                <Level1BBracketRound
+                  round={pyramidBracketView?.l1b?.rounds?.[1]}
+                  emptyMessage="Round 2 crossover pairings appear after all Round 1 matches are completed."
+                />
+              )}
             </div>
           ) : hasKnockout ? (
             <div className="bg-white rounded-lg shadow border border-gray-200 p-5">

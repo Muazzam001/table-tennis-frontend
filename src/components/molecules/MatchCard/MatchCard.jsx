@@ -15,6 +15,7 @@ const MatchCard = ({
   isAdmin = false,
   teamTiers = {},
   setConfig = null,
+  pairingHint = null,
 }) => {
   const isCompleted = match.status === 'Completed';
   const isAbandoned = Boolean(match.is_abandoned);
@@ -39,7 +40,12 @@ const MatchCard = ({
       <div className="flex flex-col gap-2.5 justify-between">
         {/* Round and Pool Info */}
         <div className="flex items-center justify-between">
-          <MatchStageBadge match={match} />
+          <div className="flex flex-col gap-1">
+            <MatchStageBadge match={match} />
+            {pairingHint ? (
+              <p className="text-xs font-semibold text-teal-800">{pairingHint}</p>
+            ) : null}
+          </div>
           <Badge variant={match.status === 'Completed' ? 'success' : 'warning'}>
             {match.status}
           </Badge>

@@ -10,7 +10,11 @@ const BracketMatchCard = ({ match, accent }) => {
 
   return (
     <div className={`border rounded-lg p-3 ${accent}`}>
-      <div className="text-xs text-gray-500 mb-2">{match.label || match.round_type}</div>
+      {match.pairingHint ? (
+        <div className="text-xs font-semibold text-teal-800 mb-2">{match.pairingHint}</div>
+      ) : (
+        <div className="text-xs text-gray-500 mb-2">{match.label || match.round_type}</div>
+      )}
       <div className="flex flex-col md:flex-row justify-between items-center gap-2">
         <div
           className={`flex items-center justify-between gap-2 text-sm font-medium p-2 rounded-lg ${getTeamRowClass(
@@ -112,9 +116,16 @@ const PyramidBracket = ({ overview, readOnly = false }) => {
           locked={!hasL1B}
         >
           {hasL1B ? (
-            <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {view.l1b.matches.map((m) => (
-                <BracketMatchCard key={m.id} match={m} accent="bg-white/80 border-teal-100" />
+            <div className="space-y-4">
+              {view.l1b.rounds.map((round) => (
+                <div key={`l1b-bracket-round-${round.roundNumber}`}>
+                  <p className="text-xs font-semibold text-teal-900 mb-2">{round.title}</p>
+                  <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {round.matches.map((m) => (
+                      <BracketMatchCard key={m.id} match={m} accent="bg-white/80 border-teal-100" />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (

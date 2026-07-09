@@ -40,26 +40,32 @@ const AuthSection = ({ isAuthenticated, isAdmin, user, onLogout, onLogin, varian
 
   if (!isAuthenticated) {
     return (
-      <Button onClick={onLogin} variant="primary" size="sm" className={isMobile ? 'w-full' : ''}>
-        Login
-      </Button>
+      <>
+        {isAdmin && (
+          <Button onClick={onLogin} variant="primary" size="sm" className={isMobile ? 'w-full' : ''}>
+            Login
+          </Button>
+        )}
+      </>
     );
   }
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2">
-        {isAdmin && (
-          <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded">
-            Admin
-          </span>
-        )}
-        <span className="text-sm text-gray-700">{user?.username}</span>
-      </div>
-      <Button onClick={onLogout} variant="outline" size="sm">
-        Logout 
-      </Button>
-    </div>
+    <>
+      {isAdmin && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded">
+              Admin
+            </span>
+            <span className="text-sm text-gray-700">{user?.username}</span>
+          </div>
+          <Button onClick={onLogout} variant="outline" size="sm">
+            Logout
+          </Button>
+        </div>
+      )}
+    </>
   );
 };
 
