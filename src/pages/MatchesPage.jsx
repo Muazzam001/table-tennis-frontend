@@ -62,8 +62,8 @@ const KNOCKOUT_ROUND_TABS = [
 
 const PYRAMID_ROUND_TABS = [
   { value: 'Level 1A', label: 'Level 1A (S1)' },
-  { value: 'Level 1B R1', label: 'L1B Round 1' },
-  { value: 'Level 1B R2', label: 'L1B Round 2' },
+  { value: 'Level 1B R1', label: 'L1B - Round 1 (S1)' },
+  { value: 'Level 1B R2', label: 'L1B - Round 2 (S1)' },
   { value: 'S3', label: 'Level 1C (S2)' },
   { value: 'Level 2', label: 'Level 2' },
   { value: 'Level 3', label: 'Level 3' },

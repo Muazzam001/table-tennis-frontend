@@ -40,15 +40,15 @@ const MatchCard = ({
       <div className="flex flex-col gap-2.5 justify-between">
         {/* Round and Pool Info */}
         <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-1">
             <MatchStageBadge match={match} />
+          <div className="flex gap-2">
             {pairingHint ? (
               <p className="text-xs font-semibold text-teal-800">{pairingHint}</p>
             ) : null}
+            <Badge variant={match.status === 'Completed' ? 'success' : 'warning'}>
+              {match.status}
+            </Badge>
           </div>
-          <Badge variant={match.status === 'Completed' ? 'success' : 'warning'}>
-            {match.status}
-          </Badge>
         </div>
 
         {/* Teams and Score */}
