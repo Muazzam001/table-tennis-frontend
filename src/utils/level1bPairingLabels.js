@@ -74,12 +74,12 @@ export function buildLevel1BRoundsView(matches, entrants = []) {
     roundNumber: roundIndex + 1,
     title:
       roundIndex === 0
-        ? 'Round 1 — Cross-group'
-        : `Round ${roundIndex + 1} — Winners' crossover`,
+        ? 'Round 1 - Cross-group'
+        : `Round ${roundIndex + 1} - Winners' crossover`,
     subtitle:
       roundIndex === 0
-        ? '(A,B): A1·B4, A2·B3… · (C,D): C1·D4, C2·D3…'
-        : 'Winners from matching (A,B) and (C,D) slots',
+        ? "(A,B): A1·B4, A2·B3, A3·B2, A4·B1\r(C,D): C1·D4, C2·D3, C3·D2, C4·D1"
+        : "Winners from matching (A,B) and (C,D) slots",
     matches: roundMatches.map((m) => ({
       ...m,
       pairingHint: getLevel1BPairingHint(m, { entrants, r1Matches }),

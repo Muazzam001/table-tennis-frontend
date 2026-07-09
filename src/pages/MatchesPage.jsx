@@ -122,6 +122,7 @@ const MatchesPage = () => {
   const [logLoading, setLogLoading] = useState(false);
   const [pyramidAdminSaving, setPyramidAdminSaving] = useState(false);
   const [activatingLevel1B, setActivatingLevel1B] = useState(false);
+  const [divisionSettingsMap, setDivisionSettingsMap] = useState({});
   const [autoFillingRound, setAutoFillingRound] = useState(null);
   const [autoFillingLabel, setAutoFillingLabel] = useState('');
   const timeSlotSummary = getTimeSlotSummary(timeSlotConfig);
@@ -169,11 +170,17 @@ const MatchesPage = () => {
     () => buildLevel1BRoundsView(level1bMatches, pyramidAdminTeams),
     [level1bMatches, pyramidAdminTeams]
   );
+  const selectedDivisionSettings = divisionSettingsMap[selectedDivision] || {};
   const level1bStatus = isTierPyramid
-    ? deriveLevel1bStatus(divisionMatches, {}, pyramidAdminTeams)
+    ? deriveLevel1bStatus(divisionMatches, selectedDivisionSettings, pyramidAdminTeams)
     : 'waiting';
+  const pyramidQualifiersPerGroup =
+    setupOptions?.config?.s1QualifiersPerGroup ??
+    pyramidTierState?.config?.s1QualifiersPerGroup ??
+    4;
   const pyramidStatus = isTierPyramid
-    ? derivePyramidTournamentStatus(divisionMatches, {}, { level1bStatus }) : null;
+    ? derivePyramidTournamentStatus(divisionMatches, {}, { level1bStatus })
+    : null;
   const quarterFinalMatches = divisionMatches.filter((m) => m.round_type === 'Quarter Final');
   const semiFinalMatches = divisionMatches.filter((m) => m.round_type === 'Semi Final');
   const isSingleGroup = Boolean(
@@ -232,6 +239,16 @@ const MatchesPage = () => {
     divisionMatches.filter((m) => m.round_type === 'Final').length === 0 &&
     (semiFinalsComplete || (skipsSemiFinals && quarterFinalMatches.length === 2 && quarterFinalsComplete));
 
+  const refreshDivisionSettings = useCallback(async () => {
+    const settingsRows = await getDivisionSettings();
+    const map = {};
+    for (const row of settingsRows) {
+      map[row.division] = row;
+    }
+    setDivisionSettingsMap(map);
+    return map;
+  }, []);
+
   const loadData = useCallback(async ({ silent = false } = {}) => {
     try {
       // Only show the full-screen spinner on a true cold load. When we already
@@ -276,11 +293,14 @@ const MatchesPage = () => {
         ]);
         const formats = buildDivisionMap(DEFAULT_TOURNAMENT_FORMAT);
         const competitionFormats = buildDivisionMap('doubles');
+        const settingsMap = {};
         for (const row of settingsRows) {
           formats[row.division] = row.tournament_format || DEFAULT_TOURNAMENT_FORMAT;
           competitionFormats[row.division] = row.competition_format || 'doubles';
+          settingsMap[row.division] = row;
         }
         if (cancelled) return;
+        setDivisionSettingsMap(settingsMap);
         setDivisionTournamentFormats(formats);
         setDivisionCompetitionFormats(competitionFormats);
         setSetupOptions(setup);
@@ -638,7 +658,10 @@ const MatchesPage = () => {
       // Reload all divisions so tab counts stay accurate
       await loadData({ silent: true });
       if (isTierPyramid) {
-        const tierData = await getPyramidTiers(selectedDivision);
+        const [tierData] = await Promise.all([
+          getPyramidTiers(selectedDivision),
+          refreshDivisionSettings(),
+        ]);
         setPyramidTierState(tierData);
       }
     } catch (err) {
@@ -829,7 +852,10 @@ const MatchesPage = () => {
       setError(null);
       const result = await activateLevel1B(selectedDivision);
       await loadData({ silent: true });
-      const tierData = await getPyramidTiers(selectedDivision);
+      const [tierData] = await Promise.all([
+        getPyramidTiers(selectedDivision),
+        refreshDivisionSettings(),
+      ]);
       setPyramidTierState(tierData);
       await showSuccess(
         'Level 1B activated',
@@ -999,7 +1025,7 @@ const MatchesPage = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {isAdmin && (
           <>
             {isTierPyramid ? (
@@ -1137,7 +1163,7 @@ const MatchesPage = () => {
               : ' Later levels unlock as results are entered.'} <br />
             <strong>S1</strong> (group play) and <strong>S2</strong> (Tier 1 round-robin) run in parallel.
             <br />
-            Top 4 per group advance to <strong>Level 1B</strong>, then top 4 advance to Level 2.
+            Top {pyramidQualifiersPerGroup} per group advance to <strong>Level 1B</strong>, then top 4 advance to Level 2.
           </p>
           <p>
             Scheduled: <strong>{level1Summary.total}</strong>
@@ -1235,7 +1261,7 @@ const MatchesPage = () => {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-2xl font-bold text-gray-900">
-                      {isR1 ? 'Level 1B — Round 1' : 'Level 1B — Round 2'}
+                      {isR1 ? 'Level 1B - Round 1' : 'Level 1B - Round 2'}
                     </h3>
                     {round?.subtitle && (
                       <p className="text-sm text-gray-600 mt-1">{round.subtitle}</p>
@@ -1252,7 +1278,7 @@ const MatchesPage = () => {
                       <p className="text-amber-900 font-medium">
                         {level1bStatus === 'waiting'
                           ? 'Complete all S1 groups to unlock Level 1B.'
-                          : 'S1 is complete — Level 1B is ready to activate.'}
+                          : 'S1 is complete - Level 1B is ready to activate.'}
                       </p>
                       {level1bStatus === 'ready' && isAdmin && (
                         <Button
