@@ -43,34 +43,50 @@ const PyramidAdminPanel = ({
   saving = false,
 }) => {
   const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [replaceWithTeamId, setReplaceWithTeamId] = useState('');
   const [toStage, setToStage] = useState('L2');
   const [toStatus, setToStatus] = useState('advanced');
   const [overrideNotes, setOverrideNotes] = useState('');
   const [regenerateFrom, setRegenerateFrom] = useState('Level 2');
   const [showLog, setShowLog] = useState(false);
 
+  const isTeamReplace = Boolean(replaceWithTeamId);
+  const replacementOptions = teams.filter((t) => String(t.id) !== String(selectedTeamId));
+
   const handleOverride = async () => {
     if (!selectedTeamId) return;
+    if (isTeamReplace && String(replaceWithTeamId) === String(selectedTeamId)) return;
+
     const team = teams.find((t) => String(t.id) === String(selectedTeamId));
+    const replacement = teams.find((t) => String(t.id) === String(replaceWithTeamId));
+
     const confirmed = await showConfirm({
-      title: 'Override advancement?',
-      text: `Set ${team?.team_name || 'team'} to stage "${toStage}" with status "${toStatus}"?`,
-      confirmText: 'Apply override',
+      title: isTeamReplace ? 'Replace team in tournament?' : 'Override advancement?',
+      text: isTeamReplace
+        ? `Swap ${team?.team_name || 'team'} with ${replacement?.team_name || 'replacement'} (stage, status, seeding source, and unfinished match slots)?`
+        : `Set ${team?.team_name || 'team'} to stage "${toStage}" with status "${toStatus}"?`,
+      confirmText: isTeamReplace ? 'Replace team' : 'Apply override',
       icon: 'warning',
     });
     if (!confirmed) return;
 
-    await onOverrideAdvancement({
-      updates: [
-        {
+    const update = isTeamReplace
+      ? {
+          teamId: Number(selectedTeamId),
+          replaceWithTeamId: Number(replaceWithTeamId),
+        }
+      : {
           teamId: Number(selectedTeamId),
           toStage,
           toStatus,
-        },
-      ],
+        };
+
+    await onOverrideAdvancement({
+      updates: [update],
       notes: overrideNotes || null,
     });
     setOverrideNotes('');
+    setReplaceWithTeamId('');
   };
 
   const handleRegenerate = async () => {
@@ -85,12 +101,16 @@ const PyramidAdminPanel = ({
     await onRegenerateStage(regenerateFrom);
   };
 
+  const canApply =
+    Boolean(selectedTeamId) && (!isTeamReplace || Boolean(replaceWithTeamId));
+
   return (
     <div className="bg-white border border-amber-200 rounded-lg p-4 space-y-5">
       <div>
         <h3 className="font-semibold text-gray-900">Pyramid admin - {divisionLabel}</h3>
         <p className="text-sm text-gray-600 mt-1">
-          Override entrant stages or regenerate downstream brackets after score corrections.
+          Override entrant stages, replace one team with another at the current stage, or regenerate
+          downstream brackets after score corrections.
           {tournamentStatus && (
             <span className="ml-2 text-gray-500">Current status: {tournamentStatus}</span>
           )}
@@ -109,12 +129,19 @@ const PyramidAdminPanel = ({
               <select
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 value={selectedTeamId}
-                onChange={(e) => setSelectedTeamId(e.target.value)}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setSelectedTeamId(nextId);
+                  if (String(replaceWithTeamId) === String(nextId)) {
+                    setReplaceWithTeamId('');
+                  }
+                }}
               >
                 <option value="">Select team…</option>
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.team_name}
+                    {team.tier != null ? ` · T${team.tier}` : ''}
                     {team.pyramid_stage ? ` (${team.pyramid_stage})` : ''}
                   </option>
                 ))}
@@ -122,11 +149,35 @@ const PyramidAdminPanel = ({
             </label>
 
             <label className="text-sm">
-              <span className="text-gray-600 block mb-1">To stage</span>
+              <span className="text-gray-600 block mb-1">Replace with team</span>
               <select
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                value={replaceWithTeamId}
+                onChange={(e) => setReplaceWithTeamId(e.target.value)}
+                disabled={!selectedTeamId}
+              >
+                <option value="">None — set stage/status instead</option>
+                {replacementOptions.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.team_name}
+                    {team.tier != null ? ` · T${team.tier}` : ''}
+                    {team.pyramid_stage ? ` (${team.pyramid_stage})` : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-gray-500 mt-1 block">
+                Swaps tournament position (stage, status, seeding source) and unfinished match slots
+                between the two teams at any stage.
+              </span>
+            </label>
+
+            <label className="text-sm">
+              <span className="text-gray-600 block mb-1">To stage</span>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
                 value={toStage}
                 onChange={(e) => setToStage(e.target.value)}
+                disabled={isTeamReplace}
               >
                 {PYRAMID_STAGES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -139,9 +190,10 @@ const PyramidAdminPanel = ({
             <label className="text-sm">
               <span className="text-gray-600 block mb-1">To status</span>
               <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
                 value={toStatus}
                 onChange={(e) => setToStatus(e.target.value)}
+                disabled={isTeamReplace}
               >
                 {PYRAMID_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -168,9 +220,9 @@ const PyramidAdminPanel = ({
               variant="outline"
               size="sm"
               onClick={handleOverride}
-              disabled={saving || !selectedTeamId}
+              disabled={saving || !canApply}
             >
-              {saving ? 'Saving…' : 'Apply override'}
+              {saving ? 'Saving…' : isTeamReplace ? 'Replace team' : 'Apply override'}
             </Button>
           </div>
         </div>
