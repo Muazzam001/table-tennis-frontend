@@ -817,7 +817,13 @@ const MatchesPage = () => {
       await loadProgressionLog(selectedDivision);
       const tierData = await getPyramidTiers(selectedDivision);
       setPyramidTierState(tierData);
-      await showSuccess('Override applied', 'Team advancement updated.');
+      const isReplace = updates?.some((u) => u.replaceWithTeamId != null);
+      await showSuccess(
+        isReplace ? 'Team replaced' : 'Override applied',
+        isReplace
+          ? 'Teams swapped in the current tournament stage (including unfinished matches).'
+          : 'Team advancement updated.'
+      );
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to override advancement');
     } finally {
