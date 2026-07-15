@@ -33,8 +33,8 @@ const GroupStandingsTable = ({
           <thead>
             <tr className="border-b border-gray-200">
               <th className="text-left p-2">Rank</th>
-              {showExitStage && <th className="text-left p-2">Exit</th>}
-              {showSourceGroup && <th className="text-left p-2">Source</th>}
+              {/* {showExitStage && <th className="text-left p-2">Exit</th>}
+              {showSourceGroup && <th className="text-left p-2">Source</th>} */}
               <th className="text-left p-2">Team</th>
               <th className="text-center p-2">P</th>
               <th className="text-center p-2">W</th>
@@ -60,7 +60,7 @@ const GroupStandingsTable = ({
                   }
                 >
                   <td className="p-2 font-semibold">{team.rank}</td>
-                  {showExitStage && (
+                  {/* {showExitStage && (
                     <td className="p-2 text-gray-600">{team.exitStage || '—'}</td>
                   )}
                   {showSourceGroup && (
@@ -71,7 +71,7 @@ const GroupStandingsTable = ({
                           : `${team.sourceGroup}${team.groupRank != null ? `-${team.groupRank}` : ''}`
                         : '—'}
                     </td>
-                  )}
+                  )} */}
                   <td className="p-2 font-medium">{team.team_name}</td>
                   <td className="p-2 text-center">{team.matches_played || 0}</td>
                   <td className="p-2 text-center">{team.matches_won || 0}</td>
