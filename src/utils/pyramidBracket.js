@@ -70,9 +70,13 @@ export function buildPyramidBracketView(overview) {
       matches: l1bMatches.map(enrich),
       rounds: l1bRounds,
       roundCount: getLevel1BRoundMatches(l1bMatches).length,
-      standings: overview?.pyramid?.l1bStandings || [],
+      standings:
+        overview?.pyramid?.level1Standings || overview?.pyramid?.l1bStandings || [],
     },
-    s2: { matches: s2Matches.map(enrich), standings: overview?.pyramid?.s2Standings || [] },
+    s2: {
+      matches: s2Matches.map(enrich),
+      standings: overview?.pyramid?.s2OverallStandings || overview?.pyramid?.s2Standings || [],
+    },
     l2: { matches: l2Matches.map(enrich) },
     l3: { matches: l3Matches.map(enrich) },
     semiFinals: semiFinals.map(enrich),

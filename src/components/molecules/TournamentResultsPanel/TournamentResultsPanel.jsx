@@ -81,8 +81,14 @@ const TournamentResultsPanel = ({
   );
   const hasGroupStage = isPyramid ? pyramidMatches.some((m) => m.round_type === 'S1') : qualifyingMatches.length > 0;
   const hasKnockout = isPyramid ? pyramidMatches.length > 0 : knockoutMatches.length > 0;
-  const s2Standings = overview?.pyramid?.s2Standings || [];
-  const l1bStandings = overview?.pyramid?.l1bStandings || [];
+  const s2Standings =
+    overview?.pyramid?.s2OverallStandings || overview?.pyramid?.s2Standings || [];
+  const s1OverallStandings = overview?.pyramid?.s1OverallStandings || [];
+  const level1Standings =
+    overview?.pyramid?.level1Standings || overview?.pyramid?.l1bStandings || [];
+  const level2Standings = overview?.pyramid?.level2Standings || [];
+  const level3Standings = overview?.pyramid?.level3Standings || [];
+  const flowRankings = overview?.pyramid?.flowRankings || [];
   const level1bStatus = overview?.pyramid?.level1bStatus || '';
   const progressionLog = overview?.pyramid?.progressionLog || [];
   const pyramidBracketView = isPyramid ? buildPyramidBracketView(overview) : null;
@@ -217,17 +223,17 @@ const TournamentResultsPanel = ({
             variant={activeTab === 'standings' ? 'primary' : 'outline'}
             size="sm"
           >
-            {isPyramid ? 'S1 Standings' : 'Group Standings'}
+            {isPyramid ? 'S1 Pool Standings' : 'Group Standings'}
           </Button>
         )}
 
-        {isPyramid && l1bStandings.length > 0 && (
+        {isPyramid && s1OverallStandings.length > 0 && (
           <Button
-            onClick={() => setActiveTab('l1b')}
-            variant={activeTab === 'l1b' ? 'primary' : 'outline'}
+            onClick={() => setActiveTab('s1-overall')}
+            variant={activeTab === 's1-overall' ? 'primary' : 'outline'}
             size="sm"
           >
-            Level 1B Rankings
+            S1 Overall
           </Button>
         )}
 
@@ -237,7 +243,47 @@ const TournamentResultsPanel = ({
             variant={activeTab === 's2' ? 'primary' : 'outline'}
             size="sm"
           >
-            S2 Standings
+            S2 Overall
+          </Button>
+        )}
+
+        {isPyramid && level1Standings.length > 0 && (
+          <Button
+            onClick={() => setActiveTab('level1')}
+            variant={activeTab === 'level1' ? 'primary' : 'outline'}
+            size="sm"
+          >
+            Level 1 Ranking
+          </Button>
+        )}
+
+        {isPyramid && level2Standings.length > 0 && (
+          <Button
+            onClick={() => setActiveTab('level2')}
+            variant={activeTab === 'level2' ? 'primary' : 'outline'}
+            size="sm"
+          >
+            Level 2 Ranking
+          </Button>
+        )}
+
+        {isPyramid && level3Standings.length > 0 && (
+          <Button
+            onClick={() => setActiveTab('level3')}
+            variant={activeTab === 'level3' ? 'primary' : 'outline'}
+            size="sm"
+          >
+            Level 3 Ranking
+          </Button>
+        )}
+
+        {isPyramid && flowRankings.length > 0 && (
+          <Button
+            onClick={() => setActiveTab('flow')}
+            variant={activeTab === 'flow' ? 'primary' : 'outline'}
+            size="sm"
+          >
+            Flow Ranking
           </Button>
         )}
 
@@ -288,12 +334,13 @@ const TournamentResultsPanel = ({
         </div>
       )}
 
-      {activeTab === 'l1b' && isPyramid && (
+      {activeTab === 's1-overall' && isPyramid && (
         <GroupStandingsTable
-          groupId="Level 1B"
-          standings={l1bStandings}
-          qualifiersCount={4}
-          qualifierLabel="Top 4 → Level 2"
+          groupId="S1"
+          title="S1 Overall Ranking"
+          standings={s1OverallStandings}
+          qualifiersCount={0}
+          qualifierLabel="All S1 teams ranked across pools (pool tables unchanged)"
           showSourceGroup
         />
       )}
@@ -301,9 +348,55 @@ const TournamentResultsPanel = ({
       {activeTab === 's2' && isPyramid && (
         <GroupStandingsTable
           groupId="S2"
+          title="S2 Overall Ranking"
           standings={s2Standings}
           qualifiersCount={4}
           qualifierLabel="Top 4 → Level 3 · Bottom 4 → Level 2"
+        />
+      )}
+
+      {activeTab === 'level1' && isPyramid && (
+        <GroupStandingsTable
+          groupId="Level 1"
+          title="Level 1 Ranking"
+          standings={level1Standings}
+          qualifiersCount={4}
+          qualifierLabel="Level 1B field · Top 4 → Level 2"
+          showSourceGroup
+        />
+      )}
+
+      {activeTab === 'level2' && isPyramid && (
+        <GroupStandingsTable
+          groupId="Level 2"
+          title="Level 2 Ranking"
+          standings={level2Standings}
+          qualifiersCount={4}
+          qualifierLabel="Level 2 entrants · Winners → Level 3"
+          showSourceGroup
+        />
+      )}
+
+      {activeTab === 'level3' && isPyramid && (
+        <GroupStandingsTable
+          groupId="Level 3"
+          title="Level 3 Ranking"
+          standings={level3Standings}
+          qualifiersCount={4}
+          qualifierLabel="Level 3 field through semis / finals path"
+          showSourceGroup
+        />
+      )}
+
+      {activeTab === 'flow' && isPyramid && (
+        <GroupStandingsTable
+          groupId="Flow"
+          title="Correct Flow Ranking"
+          standings={flowRankings}
+          qualifiersCount={0}
+          qualifierLabel="Ordered by deepest tournament progress, then overall record"
+          showExitStage
+          showSourceGroup
         />
       )}
 
@@ -312,13 +405,6 @@ const TournamentResultsPanel = ({
           {isPyramid ? (
             <div className="bg-white rounded-lg shadow border border-gray-200 p-5 space-y-4">
               <div className="flex gap-2 flex-wrap">
-                <Button
-                  onClick={() => setBracketView('full')}
-                  variant={bracketView === 'full' ? 'primary' : 'outline'}
-                  size="sm"
-                >
-                  Full Pyramid
-                </Button>
                 <Button
                   onClick={() => setBracketView('l1b-r1')}
                   variant={bracketView === 'l1b-r1' ? 'primary' : 'outline'}
@@ -333,11 +419,15 @@ const TournamentResultsPanel = ({
                 >
                   L1B Round 2
                 </Button>
+                <Button
+                  onClick={() => setBracketView('full')}
+                  variant={bracketView === 'full' ? 'primary' : 'outline'}
+                  size="sm"
+                >
+                  Full Pyramid
+                </Button>
               </div>
 
-              {bracketView === 'full' && (
-                <PyramidBracket overview={overview} readOnly={readOnly} />
-              )}
               {bracketView === 'l1b-r1' && (
                 <Level1BBracketRound
                   round={pyramidBracketView?.l1b?.rounds?.[0]}
@@ -350,6 +440,10 @@ const TournamentResultsPanel = ({
                   emptyMessage="Round 2 crossover pairings appear after all Round 1 matches are completed."
                 />
               )}
+              {bracketView === 'full' && (
+                <PyramidBracket overview={overview} readOnly={readOnly} />
+              )}
+
             </div>
           ) : hasKnockout ? (
             <div className="bg-white rounded-lg shadow border border-gray-200 p-5">
@@ -363,7 +457,7 @@ const TournamentResultsPanel = ({
         </>
       )}
 
-      {activeTab === 'results' && (
+      {activeTab === 'results' && !isPyramid && (
         <KnockoutResultsList matches={isPyramid ? pyramidMatches : knockoutMatches} />
       )}
 
