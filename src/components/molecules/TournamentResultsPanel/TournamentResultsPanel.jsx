@@ -89,6 +89,7 @@ const TournamentResultsPanel = ({
   const level2Standings = overview?.pyramid?.level2Standings || [];
   const level3Standings = overview?.pyramid?.level3Standings || [];
   const flowRankings = overview?.pyramid?.flowRankings || [];
+  const overallPerformance = overview?.pyramid?.overallPerformance || [];
   const level1bStatus = overview?.pyramid?.level1bStatus || '';
   const progressionLog = overview?.pyramid?.progressionLog || [];
   const pyramidBracketView = isPyramid ? buildPyramidBracketView(overview) : null;
@@ -287,6 +288,16 @@ const TournamentResultsPanel = ({
           </Button>
         )}
 
+        {isPyramid && overallPerformance.length > 0 && (
+          <Button
+            onClick={() => setActiveTab('overall-performance')}
+            variant={activeTab === 'overall-performance' ? 'primary' : 'outline'}
+            size="sm"
+          >
+            Overall Performance
+          </Button>
+        )}
+
         <Button
           onClick={() => setActiveTab('bracket')}
           variant={activeTab === 'bracket' ? 'primary' : 'outline'}
@@ -397,6 +408,16 @@ const TournamentResultsPanel = ({
           qualifierLabel="Ordered by deepest tournament progress, then overall record"
           showExitStage
           showSourceGroup
+        />
+      )}
+
+      {activeTab === 'overall-performance' && isPyramid && (
+        <GroupStandingsTable
+          groupId="Overall"
+          title="Overall Match Performance"
+          standings={overallPerformance}
+          qualifiersCount={0}
+          qualifierLabel="All players ranked by overall match statistics (Wins → Points → Set Diff → Point Diff), regardless of tier/band"
         />
       )}
 
